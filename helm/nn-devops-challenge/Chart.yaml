@@ -1,0 +1,5 @@
+apiVersion: v2
+name: nn-devops-challenge
+version: 0.1.0
+type: application
+description: Spring Boot app

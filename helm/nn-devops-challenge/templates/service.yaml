@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "nn-devops-challenge.fullname" . }}
+spec:
+  type: {{ .Values.service.type }}
+  selector:
+    app.kubernetes.io/name: {{ include "nn-devops-challenge.name" . }}
+  ports:
+  - port: {{ .Values.service.port }}
+    targetPort: 8080
