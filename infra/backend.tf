@@ -1,9 +1,9 @@
 terraform {
   backend "s3" {
-    bucket         = "nn-devops-terraform-state"   # Nombre del bucket en AWS S3
-    key            = "infra/terraform.tfstate"     # Ruta dentro del bucket
-    region         = "eu-west-1"                   # Región del bucket
+    bucket         = "nn-devops-terraform-sofia"
+    key            = "infra/terraform.tfstate"
+    region         = "eu-west-1"
     encrypt        = true
-    dynamodb_table = "nn-devops-terraform-lock"    # Para bloqueo concurrente
+    dynamodb_table = "nn-devops-terraform-lock-sofia"
   }
 }

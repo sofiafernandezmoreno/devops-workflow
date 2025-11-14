@@ -4,7 +4,7 @@ terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
-      version = "~> 6.20.0"
+      version = ">= 5.0.0, < 6.0.0"
     }
   }
 }
@@ -38,8 +38,8 @@ module "eks" {
 # MODULE: ECR
 # -------------------------
 module "ecr" {
-  source  = "./modules/ecr"
-  project = var.project
+  source   = "./modules/ecr"
+  project  = var.project
   ecr_repo = var.ecr_repo
 }
 

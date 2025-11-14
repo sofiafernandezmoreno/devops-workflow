@@ -1,30 +1,17 @@
-data "aws_caller_identity" "current" {}
+resource "aws_iam_role" "eks_admin" {
+  name = "${var.project}-eks-admin"
 
-resource "aws_iam_user" "azdo" {
-  name = "${var.project}-azdo"
-  tags = { Project = var.project }
+  assume_role_policy = data.aws_iam_policy_document.eks_admin.json
 }
 
-resource "aws_iam_user_policy" "azdo_policy" {
-  name = "azdo-ci-policy"
-  user = aws_iam_user.azdo.name
+data "aws_iam_policy_document" "eks_admin" {
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRole"]
 
-  policy = jsonencode({
-    Version = "2012-10-17",
-    Statement = [
-      {
-        Effect   = "Allow",
-        Action   = [
-          "ecr:*",
-          "eks:DescribeCluster",
-          "sts:GetCallerIdentity"
-        ],
-        Resource = "*"
-      }
-    ]
-  })
-}
-
-resource "aws_iam_access_key" "azdo" {
-  user = aws_iam_user.azdo.name
+    principals {
+      type        = "Service"
+      identifiers = ["eks.amazonaws.com"]
+    }
+  }
 }

@@ -1,33 +1,29 @@
+# If use_default_vpc = true → fetch default VPC
 data "aws_vpc" "default" {
-  count   = var.use_default_vpc ? 1 : 0
   default = true
+  count   = var.use_default_vpc ? 1 : 0
 }
 
 data "aws_subnets" "default" {
-  count = var.use_default_vpc ? 1 : 0
+  count      = var.use_default_vpc ? 1 : 0
   filter {
     name   = "vpc-id"
     values = [data.aws_vpc.default[0].id]
   }
 }
 
-module "vpc" {
-  count   = var.use_default_vpc ? 0 : 1
-  source  = "terraform-aws-modules/vpc/aws"
-  version = "~> 5.5"
-
-  name = "${var.project}-vpc"
-  cidr = "10.0.0.0/16"
-
-  azs             = ["${var.aws_region}a", "${var.aws_region}b"]
-  public_subnets  = ["10.0.1.0/24", "10.0.2.0/24"]
-  private_subnets = ["10.0.11.0/24", "10.0.12.0/24"]
-
-  enable_nat_gateway = true
-  single_nat_gateway = true
+# If use_default_vpc = false → create a new VPC
+resource "aws_vpc" "new" {
+  count                = var.use_default_vpc ? 0 : 1
+  cidr_block           = "10.0.0.0/16"
+  enable_dns_support   = true
+  enable_dns_hostnames = true
+  tags = { Project = var.project }
 }
 
-locals {
-  vpc_id     = var.use_default_vpc ? data.aws_vpc.default[0].id : module.vpc[0].vpc_id
-  subnet_ids = var.use_default_vpc ? data.aws_subnets.default[0].ids : module.vpc[0].private_subnets
+resource "aws_subnet" "new" {
+  count      = var.use_default_vpc ? 0 : 2
+  vpc_id     = aws_vpc.new[0].id
+  cidr_block = cidrsubnet(aws_vpc.new[0].cidr_block, 4, count.index)
+  tags       = { Project = var.project }
 }

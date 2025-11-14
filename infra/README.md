@@ -1,25 +1,27 @@
-# 🏗️ Terraform Infrastructure — nn-devops-challenge
+<!-- BEGIN_TF_DOCS -->
 
-This folder provisions all AWS resources needed for the Azure DevOps CI/CD pipeline:
-- Amazon EKS Cluster (v1.30)
-- Amazon ECR Repository
-- IAM User for Azure DevOps (with ECR + EKS access)
-- Optional VPC creation (toggle between default or custom)
 
----
 
-## ⚙️ Prerequisites
+## Resources
 
-- AWS CLI configured (`aws configure`)
-- Terraform ≥ 1.6
-- Admin permissions in your AWS account (for creating IAM, EKS, and VPC)
+No resources.
+## Inputs
 
----
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| aws\_region | AWS region | `string` | `"eu-west-1"` | no |
+| ecr\_repo | ECR repository name | `string` | `"springboot-app"` | no |
+| project | Project name prefix | `string` | `"nn-devops"` | no |
+| use\_default\_vpc | If true, reuse AWS default VPC (recommended for free-tier) | `bool` | `true` | no |
+## Outputs
 
-## 🚀 Usage
-
-### 1️⃣ Initialize Terraform
-
-```bash
-cd infra
-terraform init
+| Name | Description |
+|------|-------------|
+| aws\_account\_id | n/a |
+| azdo\_access\_key\_id | n/a |
+| azdo\_secret\_access\_key | n/a |
+| ecr\_repository\_url | n/a |
+| eks\_cluster\_name | n/a |
+| subnet\_ids | n/a |
+| vpc\_id | n/a |
+<!-- END_TF_DOCS -->

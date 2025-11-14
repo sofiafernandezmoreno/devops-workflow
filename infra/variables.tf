@@ -1,20 +1,23 @@
+variable "project" {
+  type        = string
+  description = "Project name for tagging and naming"
+  default     = "nn-devops-challenge"
+}
+
 variable "aws_region" {
-  description = "AWS region"
+  type        = string
+  description = "AWS region for the deployment"
   default     = "eu-west-1"
 }
 
-variable "project" {
-  description = "Project name prefix"
-  default     = "nn-devops"
+variable "use_default_vpc" {
+  type        = bool
+  description = "Use AWS default VPC instead of creating a new one"
+  default     = true
 }
 
 variable "ecr_repo" {
-  description = "ECR repository name"
-  default     = "springboot-app"
-}
-
-variable "use_default_vpc" {
-  description = "If true, reuse AWS default VPC (recommended for free-tier)"
-  type        = bool
-  default     = true
+  type        = string
+  description = "Name of the ECR repository"
+  default     = "nn-devops-challenge"
 }
