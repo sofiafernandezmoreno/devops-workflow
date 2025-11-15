@@ -22,8 +22,12 @@ AWS_REGION    ?= eu-west-1
 TF_VARS_FILE  := $(TERRAFORM_DIR)/envs/$(ENV)/terraform.tfvars
 
 # Helm / deploy
-CHART_PATH    ?= helm/nn-devops-challenge/app
+CHART_PATH    ?= helm/
 DEPLOY_SCRIPT ?= scripts/deploy.sh
+# Helm chartsnap (snapshot testing)
+CHART_SNAPSHOT_VALUES_DIR  ?= $(CHART_PATH)/ci
+CHART_SNAPSHOT_OUTPUT_DIR  ?= $(CHART_PATH)/ci/snapshots
+
 
 # ---------------------------------------------------------
 # Colors for help output
@@ -40,7 +44,8 @@ RESET  := \033[0m
         build \
         scan push sign verify \
         tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate tf-docs \
-        deploy-dev deploy-staging deploy-prod
+        deploy-dev deploy-staging deploy-prod \
+		chartsnap-install chartsnap-snapshot chartsnap-snapshot-all chartsnap-update
 
 # ---------------------------------------------------------
 # Help
@@ -130,6 +135,33 @@ verify: ## Verify Cosign signature
 	cosign verify --key ./cosign.pub $(IMAGE)
 
 # ---------------------------------------------------------
+# HELM CHART SNAPSHOTS (helm-chartsnap)
+# ---------------------------------------------------------
+
+chartsnap-install: ## Install helm-chartsnap Helm plugin
+	@helm plugin list 2>/dev/null | grep -q chartsnap \
+		&& echo "helm-chartsnap plugin already installed" \
+		|| (echo "Installing helm-chartsnap plugin..." && \
+			helm plugin install https://github.com/jlandowner/helm-chartsnap)
+
+chartsnap-snapshot: chartsnap-install ## Generate snapshot for chart with default values (stored in ci/)
+	@mkdir -p "$(CHART_SNAPSHOT_OUTPUT_DIR)"
+	@echo "Generating snapshot for chart: $(CHART_PATH) (default values) into $(CHART_SNAPSHOT_OUTPUT_DIR)"
+	helm chartsnap -c $(CHART_PATH) -o $(CHART_SNAPSHOT_OUTPUT_DIR)
+
+chartsnap-snapshot-all: chartsnap-install ## Generate snapshots for all test values in CHART_SNAPSHOT_VALUES_DIR (stored in ci/)
+	@test -d "$(CHART_SNAPSHOT_VALUES_DIR)" || (echo "Missing chartsnap values dir: $(CHART_SNAPSHOT_VALUES_DIR)" && exit 1)
+	@mkdir -p "$(CHART_SNAPSHOT_OUTPUT_DIR)"
+	@echo "Generating snapshots for chart: $(CHART_PATH) using values in $(CHART_SNAPSHOT_VALUES_DIR) into $(CHART_SNAPSHOT_OUTPUT_DIR)"
+	helm chartsnap -c $(CHART_PATH) -f $(CHART_SNAPSHOT_VALUES_DIR) -o $(CHART_SNAPSHOT_OUTPUT_DIR)
+
+chartsnap-update: chartsnap-install ## Update existing snapshots in ci/
+	@mkdir -p "$(CHART_SNAPSHOT_OUTPUT_DIR)"
+	@echo "Updating snapshots for chart: $(CHART_PATH) in $(CHART_SNAPSHOT_OUTPUT_DIR)"
+	helm chartsnap -c $(CHART_PATH) -f $(CHART_SNAPSHOT_VALUES_DIR) -o $(CHART_SNAPSHOT_OUTPUT_DIR) -u
+
+
+# ---------------------------------------------------------
 # HELM / KUBERNETES DEPLOY
 # ---------------------------------------------------------
 
@@ -141,3 +173,5 @@ deploy-staging: ## Deploy to staging namespace using Helm
 
 deploy-prod: ## Deploy to prod namespace using Helm
 	./$(DEPLOY_SCRIPT) prod "$(IMAGE)" "$(CHART_PATH)"
+
+
