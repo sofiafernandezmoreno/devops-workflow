@@ -1,0 +1,26 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:base", ":semanticCommits"],
+  "enabledManagers": ["maven", "dockerfile", "helm-values", "azure-pipelines"],
+  "timezone": "Europe/Madrid",
+  "labels": ["renovate", "dependencies"],
+  "packageRules": [
+    {
+      "matchManagers": ["maven"],
+      "groupName": "Maven dependencies (weekly batch)",
+      "schedule": ["before 6am on sunday"]
+    },
+    {
+      "matchManagers": ["dockerfile"],
+      "groupName": "Docker base images"
+    },
+    {
+      "matchManagers": ["helm-values"],
+      "groupName": "Helm charts/values"
+    },
+    {
+      "matchManagers": ["azure-pipelines"],
+      "groupName": "Azure Pipelines tasks"
+    }
+  ]
+}

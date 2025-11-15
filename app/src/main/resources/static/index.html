@@ -1,0 +1,1618 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>NN DevOps Challenge – Cloud Native Pipeline</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Simple icon -->
+    <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/5968/5968350.png" />
+
+    <!-- Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;800&family=Inter:wght@300;400;600;700&display=swap"
+        rel="stylesheet">
+
+    <style>
+        :root {
+            --bg: #050816;
+            --bg-alt: #050b1f;
+            --primary: #00f6ff;
+            --primary-soft: rgba(0, 246, 255, 0.12);
+            --accent: #ff7ae6;
+            --text: #e5e7eb;
+            --muted: #9ca3af;
+            --card: rgba(15, 23, 42, 0.85);
+            --border: rgba(148, 163, 184, 0.25);
+            --radius-xl: 22px;
+            --shadow-soft: 0 18px 60px rgba(15, 23, 42, 0.9);
+            --blur: 18px;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            min-height: 100vh;
+            font-family: "Inter", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+            color: var(--text);
+            background:
+                radial-gradient(circle at top left, rgba(0, 246, 255, 0.17), transparent 55%),
+                radial-gradient(circle at bottom right, rgba(255, 122, 230, 0.12), transparent 55%),
+                radial-gradient(circle at top right, rgba(94, 92, 255, 0.18), transparent 55%),
+                linear-gradient(135deg, #030712, #020617 60%, #020617);
+            background-attachment: fixed;
+            overflow-x: hidden;
+        }
+
+        .noise-overlay {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            opacity: 0.10;
+            mix-blend-mode: soft-light;
+            background-image: url("https://grainy-gradients.vercel.app/noise.svg");
+            z-index: 0;
+        }
+
+        main {
+            position: relative;
+            z-index: 1;
+            max-width: 1120px;
+            margin: 0 auto;
+            padding: 32px 16px 60px;
+        }
+
+        /* -----------------------------------
+           HEADER / HERO
+        ----------------------------------- */
+
+        .badge-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 18px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.09em;
+            border: 1px solid rgba(148, 163, 184, 0.4);
+            background: radial-gradient(circle at top left, rgba(15, 23, 42, 0.9), rgba(15, 23, 42, 0.6));
+            color: var(--muted);
+        }
+
+        .badge-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: radial-gradient(circle, #4ade80 0, #16a34a 40%, #052e16 100%);
+            box-shadow: 0 0 12px rgba(74, 222, 128, 0.9);
+        }
+
+        .hero {
+            display: grid;
+            grid-template-columns: minmax(0, 3fr) minmax(0, 2.4fr);
+            gap: 32px;
+            align-items: center;
+            margin-bottom: 42px;
+        }
+
+        @media (max-width: 900px) {
+            .hero {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        .hero-title {
+            font-size: clamp(2.4rem, 3vw + 1.4rem, 3.1rem);
+            line-height: 1.1;
+            font-weight: 800;
+            letter-spacing: -0.04em;
+            margin-bottom: 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .hero-title span.highlight {
+            background: linear-gradient(120deg, var(--primary), #4f46e5, var(--accent));
+            -webkit-background-clip: text;
+            color: transparent;
+        }
+
+        .hero-subtitle {
+            font-size: 14px;
+            color: var(--muted);
+            max-width: 520px;
+        }
+
+        .hero-subtitle strong {
+            color: var(--primary);
+            font-weight: 600;
+        }
+
+        .pill-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 16px;
+            margin-bottom: 12px;
+        }
+
+        .pill {
+            font-family: "JetBrains Mono", monospace;
+            font-size: 11px;
+            padding: 4px 9px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.6);
+            color: var(--muted);
+            background: rgba(15, 23, 42, 0.75);
+        }
+
+        .hero-cta-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin-top: 18px;
+        }
+
+        .btn-primary,
+        .btn-ghost {
+            position: relative;
+            overflow: hidden;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.5);
+            font-size: 13px;
+            padding: 8px 18px;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            cursor: pointer;
+            text-decoration: none;
+            transition: transform 0.16s ease-out, box-shadow 0.16s ease-out, background 0.2s ease-out, border-color 0.2s ease-out;
+            white-space: nowrap;
+        }
+
+        .btn-primary {
+            background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.4), transparent 60%),
+                linear-gradient(135deg, #22c1c3, #0ea5e9, #4f46e5);
+            color: white;
+            box-shadow: 0 12px 40px rgba(56, 189, 248, 0.4);
+            border-color: transparent;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-1px) scale(1.01);
+            box-shadow: 0 18px 55px rgba(37, 99, 235, 0.55);
+        }
+
+        .btn-ghost {
+            background: rgba(15, 23, 42, 0.8);
+            color: var(--muted);
+        }
+
+        .btn-ghost:hover {
+            background: rgba(15, 23, 42, 0.95);
+            transform: translateY(-1px);
+            border-color: rgba(148, 163, 184, 0.8);
+        }
+
+        .btn-icon {
+            font-size: 16px;
+        }
+
+        .hero-metrics {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 18px;
+            margin-top: 24px;
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .metric-pill {
+            display: inline-flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .metric-label {
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-size: 10px;
+            color: rgba(148, 163, 184, 0.9);
+        }
+
+        .metric-value {
+            font-family: "JetBrains Mono", monospace;
+            color: var(--primary);
+        }
+
+        /* Right hero: 3D-ish card */
+        .hero-card {
+            position: relative;
+            border-radius: 30px;
+            padding: 18px 18px 16px;
+            background:
+                radial-gradient(circle at top left, rgba(45, 212, 191, 0.15), transparent 55%),
+                radial-gradient(circle at bottom right, rgba(94, 92, 255, 0.22), transparent 55%),
+                rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(148, 163, 184, 0.55);
+            box-shadow: var(--shadow-soft);
+            backdrop-filter: blur(var(--blur));
+            transform: perspective(1200px) rotateX(11deg) rotateY(-11deg);
+            transform-origin: center;
+            transition: transform 0.5s ease, box-shadow 0.35s ease, border-color 0.25s ease;
+            overflow: hidden;
+        }
+
+        .hero-card:hover {
+            transform: perspective(1200px) rotateX(6deg) rotateY(-4deg) translateY(-4px);
+            box-shadow: 0 26px 80px rgba(15, 23, 42, 0.9);
+            border-color: rgba(248, 250, 252, 0.7);
+        }
+
+        .hero-card-glow {
+            position: absolute;
+            inset: -40%;
+            background: radial-gradient(circle at 20% 0, rgba(56, 189, 248, 0.35), transparent 55%),
+                radial-gradient(circle at 80% 100%, rgba(244, 114, 182, 0.4), transparent 55%);
+            opacity: 0.5;
+            mix-blend-mode: screen;
+            pointer-events: none;
+        }
+
+        .hero-card-inner {
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .hero-card-title {
+            font-size: 13px;
+            font-weight: 600;
+            letter-spacing: 0.16em;
+            text-transform: uppercase;
+            color: rgba(226, 232, 240, 0.9);
+        }
+
+        .hero-card-env-badge {
+            font-family: "JetBrains Mono", monospace;
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.6);
+            background: rgba(15, 23, 42, 0.85);
+            color: rgba(226, 232, 240, 0.95);
+        }
+
+        .hero-card-main {
+            display: grid;
+            grid-template-columns: 1.1fr 1.1fr;
+            gap: 14px;
+            align-items: stretch;
+            margin-top: 6px;
+        }
+
+        .code-block {
+            border-radius: var(--radius-xl);
+            padding: 12px 12px 11px;
+            background: rgba(15, 23, 42, 0.9);
+            border: 1px solid rgba(148, 163, 184, 0.65);
+            font-family: "JetBrains Mono", monospace;
+            font-size: 11px;
+            color: rgba(226, 232, 240, 0.95);
+            box-shadow: 0 14px 45px rgba(15, 23, 42, 0.8);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .code-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 10px;
+            margin-bottom: 6px;
+            color: rgba(148, 163, 184, 0.85);
+        }
+
+        .code-dots {
+            display: inline-flex;
+            gap: 4px;
+        }
+
+        .code-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            background: #f97316;
+        }
+
+        .code-dot:nth-child(2) {
+            background: #22c55e;
+        }
+
+        .code-dot:nth-child(3) {
+            background: #facc15;
+        }
+
+        .code-content {
+            white-space: pre;
+            overflow: auto;
+            max-height: 190px;
+        }
+
+        .code-keyword {
+            color: #7dd3fc;
+        }
+
+        .code-func {
+            color: #a5b4fc;
+        }
+
+        .code-value {
+            color: #f9a8d4;
+        }
+
+        .code-comment {
+            color: #6b7280;
+        }
+
+        .cluster-card {
+            border-radius: var(--radius-xl);
+            padding: 12px 12px 11px;
+            background: linear-gradient(145deg, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 0.75));
+            border: 1px solid rgba(148, 163, 184, 0.55);
+            box-shadow: 0 10px 40px rgba(15, 23, 42, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            gap: 10px;
+        }
+
+        .cluster-envs {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            font-size: 11px;
+        }
+
+        .env-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 6px 9px;
+            border-radius: 999px;
+            background: rgba(15, 23, 42, 0.95);
+            border: 1px solid rgba(51, 65, 85, 0.85);
+        }
+
+        .env-name {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-family: "JetBrains Mono", monospace;
+            font-size: 11px;
+        }
+
+        .env-dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 999px;
+            box-shadow: 0 0 12px rgba(74, 222, 128, 0.8);
+            background: radial-gradient(circle, #4ade80 0, #22c55e 45%, #052e16 100%);
+        }
+
+        .env-dot.staging {
+            box-shadow: 0 0 12px rgba(250, 204, 21, 0.85);
+            background: radial-gradient(circle, #facc15 0, #eab308 45%, #422006 100%);
+        }
+
+        .env-dot.prod {
+            box-shadow: 0 0 12px rgba(248, 113, 113, 0.85);
+            background: radial-gradient(circle, #f97373 0, #ef4444 45%, #450a0a 100%);
+        }
+
+        .env-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.16em;
+            color: rgba(148, 163, 184, 0.9);
+        }
+
+        .cluster-meta {
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            font-size: 10px;
+            color: rgba(148, 163, 184, 0.9);
+            border-top: 1px dashed rgba(55, 65, 81, 0.9);
+            padding-top: 8px;
+            margin-top: 2px;
+        }
+
+        .cluster-meta span strong {
+            color: var(--primary);
+            font-family: "JetBrains Mono", monospace;
+        }
+
+        /* -----------------------------------
+           SECTION: PIPELINE & ENV CARDS
+        ----------------------------------- */
+
+        .section {
+            margin-bottom: 36px;
+        }
+
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            gap: 20px;
+            margin-bottom: 16px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: rgba(229, 231, 235, 0.95);
+        }
+
+        .section-subtitle {
+            font-size: 13px;
+            color: var(--muted);
+            max-width: 520px;
+        }
+
+        .pipeline-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 1.4fr) minmax(0, 1.4fr);
+            gap: 18px;
+        }
+
+        @media (max-width: 900px) {
+            .pipeline-grid {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        .card {
+            background: var(--card);
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--border);
+            box-shadow: var(--shadow-soft);
+            padding: 14px 14px 12px;
+            backdrop-filter: blur(var(--blur));
+            position: relative;
+            overflow: hidden;
+        }
+
+        .card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .card-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: rgba(229, 231, 235, 0.98);
+        }
+
+        .card-badge {
+            font-family: "JetBrains Mono", monospace;
+            font-size: 10px;
+            padding: 3px 8px;
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.6);
+            color: rgba(156, 163, 175, 0.95);
+            background: rgba(15, 23, 42, 0.9);
+        }
+
+        .card-link {
+            font-family: "JetBrains Mono", monospace;
+            font-size: 10px;
+            color: var(--primary);
+            cursor: pointer;
+            text-decoration: none;
+        }
+
+        .card-link:hover {
+            text-decoration: underline;
+        }
+
+        .pipeline-steps {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 8px;
+            margin-top: 6px;
+        }
+
+        @media (max-width: 900px) {
+            .pipeline-steps {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        .step {
+            border-radius: 16px;
+            padding: 8px 8px 7px;
+            background:
+                radial-gradient(circle at top left, rgba(56, 189, 248, 0.14), transparent 60%),
+                rgba(15, 23, 42, 0.96);
+            border: 1px solid rgba(148, 163, 184, 0.55);
+            font-size: 11px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .step-label {
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            font-size: 9px;
+            color: rgba(148, 163, 184, 0.9);
+        }
+
+        .step-title {
+            font-weight: 500;
+            color: rgba(243, 244, 246, 0.95);
+        }
+
+        .step-desc {
+            font-size: 10px;
+            color: rgba(148, 163, 184, 0.95);
+        }
+
+        .step-number {
+            position: absolute;
+            right: 8px;
+            bottom: 5px;
+            font-family: "JetBrains Mono", monospace;
+            font-size: 10px;
+            color: rgba(148, 163, 184, 0.9);
+        }
+
+        .env-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-top: 6px;
+        }
+
+        @media (max-width: 900px) {
+            .env-grid {
+                grid-template-columns: minmax(0, 1fr);
+            }
+        }
+
+        .env-card {
+            border-radius: 18px;
+            padding: 10px 10px 9px;
+            background:
+                radial-gradient(circle at top left, rgba(56, 189, 248, 0.16), transparent 60%),
+                rgba(15, 23, 42, 0.96);
+            border: 1px solid rgba(148, 163, 184, 0.6);
+            font-size: 11px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .env-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 4px;
+        }
+
+        .env-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            font-family: "JetBrains Mono", monospace;
+            font-size: 10px;
+        }
+
+        .env-card-desc {
+            color: rgba(148, 163, 184, 0.95);
+        }
+
+        .env-card-meta {
+            margin-top: 4px;
+            display: flex;
+            justify-content: space-between;
+            gap: 6px;
+            font-size: 9px;
+            color: rgba(148, 163, 184, 0.9);
+        }
+
+        /* -----------------------------------
+           SECTION: OPA + COSIGN + RENOVATE
+        ----------------------------------- */
+
+        .tags-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 6px;
+        }
+
+        .tag {
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.5);
+            padding: 3px 8px;
+            font-size: 10px;
+            font-family: "JetBrains Mono", monospace;
+            color: rgba(156, 163, 175, 0.96);
+            background: rgba(15, 23, 42, 0.95);
+        }
+
+        .tag span {
+            color: var(--primary);
+        }
+
+        .status-line {
+            margin-top: 4px;
+        }
+
+        .status-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 4px 10px;
+            border-radius: 999px;
+            font-size: 11px;
+            font-family: "JetBrains Mono", monospace;
+            border: 1px solid rgba(148, 163, 184, 0.7);
+            background: rgba(15, 23, 42, 0.95);
+            color: rgba(229, 231, 235, 0.98);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 999px;
+            background: radial-gradient(circle, #9ca3af 0, #4b5563 45%, #020617 100%);
+            box-shadow: 0 0 10px rgba(148, 163, 184, 0.7);
+        }
+
+        .status-pill-ok {
+            border-color: rgba(34, 197, 94, 0.9);
+            background: rgba(6, 78, 59, 0.9);
+        }
+
+        .status-pill-ok .status-dot {
+            background: radial-gradient(circle, #4ade80 0, #22c55e 45%, #052e16 100%);
+            box-shadow: 0 0 14px rgba(74, 222, 128, 0.95);
+        }
+
+        .status-pill-warn {
+            border-color: rgba(234, 179, 8, 0.9);
+            background: rgba(80, 53, 10, 0.9);
+        }
+
+        .status-pill-warn .status-dot {
+            background: radial-gradient(circle, #facc15 0, #eab308 45%, #422006 100%);
+            box-shadow: 0 0 14px rgba(250, 204, 21, 0.9);
+        }
+
+        .status-pill-error {
+            border-color: rgba(248, 113, 113, 0.95);
+            background: rgba(127, 29, 29, 0.94);
+        }
+
+        .status-pill-error .status-dot {
+            background: radial-gradient(circle, #f97373 0, #ef4444 45%, #450a0a 100%);
+            box-shadow: 0 0 14px rgba(248, 113, 113, 0.95);
+        }
+
+        .status-pill-loading {
+            opacity: 0.8;
+        }
+
+        .status-meta {
+            margin-top: 8px;
+            font-size: 10px;
+            color: rgba(148, 163, 184, 0.9);
+        }
+
+        .status-meta span {
+            font-family: "JetBrains Mono", monospace;
+            color: var(--primary);
+        }
+
+        /* -----------------------------------
+           MODAL (Azure DevOps pipeline)
+        ----------------------------------- */
+
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: radial-gradient(circle at top, rgba(15, 23, 42, 0.96), rgba(15, 23, 42, 0.98));
+            backdrop-filter: blur(14px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+            padding: 16px;
+        }
+
+        .modal-backdrop.open {
+            display: flex;
+        }
+
+        .modal {
+            max-width: 920px;
+            width: 100%;
+            border-radius: 26px;
+            background: radial-gradient(circle at top left, rgba(56, 189, 248, 0.12), transparent 55%),
+                radial-gradient(circle at bottom right, rgba(244, 114, 182, 0.18), transparent 55%),
+                rgba(15, 23, 42, 0.98);
+            border: 1px solid rgba(148, 163, 184, 0.6);
+            box-shadow: 0 30px 90px rgba(15, 23, 42, 0.95);
+            padding: 16px 18px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            position: relative;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .modal-title {
+            font-size: 14px;
+            font-weight: 600;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: rgba(226, 232, 240, 0.95);
+        }
+
+        .modal-subtitle {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
+        .modal-close-btn {
+            border-radius: 999px;
+            border: 1px solid rgba(148, 163, 184, 0.7);
+            background: rgba(15, 23, 42, 0.9);
+            color: rgba(229, 231, 235, 0.96);
+            width: 26px;
+            height: 26px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            cursor: pointer;
+        }
+
+        .modal-close-btn:hover {
+            background: rgba(15, 23, 42, 1);
+        }
+
+        .modal-body {
+            margin-top: 4px;
+            border-radius: 20px;
+            background: rgba(15, 23, 42, 0.96);
+            border: 1px solid rgba(51, 65, 85, 0.9);
+            padding: 10px 10px 8px;
+        }
+
+        .modal-pre {
+            font-family: "JetBrains Mono", monospace;
+            font-size: 11px;
+            color: rgba(226, 232, 240, 0.98);
+            max-height: 380px;
+            overflow: auto;
+            white-space: pre;
+        }
+
+        .modal-footer {
+            margin-top: 6px;
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            font-size: 10px;
+            color: rgba(148, 163, 184, 0.9);
+        }
+
+        .modal-footer span {
+            font-family: "JetBrains Mono", monospace;
+        }
+
+        /* -----------------------------------
+           FOOTER
+        ----------------------------------- */
+
+        footer {
+            margin-top: 28px;
+            padding-top: 12px;
+            border-top: 1px solid rgba(31, 41, 55, 0.9);
+            font-size: 11px;
+            color: rgba(148, 163, 184, 0.9);
+            display: flex;
+            justify-content: space-between;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+
+        footer a {
+            color: var(--primary);
+            text-decoration: none;
+            font-family: "JetBrains Mono", monospace;
+            font-size: 10px;
+        }
+
+        footer a:hover {
+            text-decoration: underline;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="noise-overlay"></div>
+
+    <main>
+        <!-- BADGE -->
+        <div class="badge-row">
+            <div class="badge">
+                <span class="badge-dot"></span>
+                Sofía Fernández Moreno – DevOps Challenge · Spring Boot · EKS · GitOps (Helm + kubectl)
+            </div>
+        </div>
+
+        <!-- HERO -->
+        <section class="hero">
+            <div>
+                <h1 class="hero-title">
+                    <span>NN DevOps Challenge – </span>
+                    <span class="highlight">Complete End-to-End Solution</span>
+                </h1>
+
+                <p class="hero-subtitle">
+                    Small Spring Boot app wired into a
+                    <strong>secure, automated</strong> pipeline:
+                    build → scan → sign → push → promote → Helm deploy to EKS.
+                </p>
+
+                <div class="pill-row">
+                    <span class="pill">terraform · eks · ecr · iam</span>
+                    <span class="pill">trivy · cosign · opa</span>
+                    <span class="pill">helm · kubectl · azure devops</span>
+                    <span class="pill">dev → staging → prod (namespaces)</span>
+                </div>
+
+                <div class="hero-cta-row">
+                    <a class="btn-primary" href="#pipeline" data-open-pipeline-modal="true">
+                        <span class="btn-icon">⚙️</span>
+                        View CI/CD flow
+                    </a>
+                    <a class="btn-ghost" href="#security">
+                        <span class="btn-icon">🛡️</span>
+                        Security & policies
+                    </a>
+                </div>
+
+                <div class="hero-metrics">
+                    <div class="metric-pill">
+                        <span class="metric-label">Cluster</span>
+                        <span class="metric-value">nn-devops-challenge-cluster</span>
+                    </div>
+                    <div class="metric-pill">
+                        <span class="metric-label">Image</span>
+                        <span class="metric-value">ECR + Cosign</span>
+                    </div>
+                    <div class="metric-pill">
+                        <span class="metric-label">Envs (k8s)</span>
+                        <span class="metric-value">dev · staging · prod</span>
+                    </div>
+                </div>
+            </div>
+
+        </section>
+
+        <!-- PIPELINE SECTION -->
+        <section id="pipeline" class="section">
+            <div class="section-header">
+                <h2 class="section-title">CI/CD pipeline</h2>
+                <p class="section-subtitle">
+                    One Azure DevOps pipeline that builds the Spring Boot image, scans for
+                    critical vulnerabilities, signs it with Cosign, pushes to ECR and then
+                    promotes the same signed artifact through <strong>dev → staging → prod</strong>.
+                </p>
+            </div>
+
+            <div class="pipeline-grid">
+                <!-- Left: stages -->
+                <article class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Stages</h3>
+                        <span class="card-badge">Build · Scan · Sign · Deploy</span>
+                        <a class="card-link" href="#" data-open-pipeline-modal="true">view YAML</a>
+                    </div>
+                    <div class="pipeline-steps">
+                        <div class="step">
+                            <span class="step-label">stage 1</span>
+                            <div class="step-title">Build & test</div>
+                            <div class="step-desc">
+                                Maven unit tests and Docker build for the Spring Boot app.
+                            </div>
+                            <span class="step-number">01</span>
+                        </div>
+                        <div class="step">
+                            <span class="step-label">stage 2</span>
+                            <div class="step-title">Security scan</div>
+                            <div class="step-desc">
+                                Trivy fails the pipeline on any <strong>CRITICAL</strong> finding.
+                            </div>
+                            <span class="step-number">02</span>
+                        </div>
+                        <div class="step">
+                            <span class="step-label">stage 3</span>
+                            <div class="step-title">Sign & push</div>
+                            <div class="step-desc">
+                                Push to ECR and sign with Cosign, storing the signature next to the image.
+                            </div>
+                            <span class="step-number">03</span>
+                        </div>
+                        <div class="step">
+                            <span class="step-label">stage 4</span>
+                            <div class="step-title">Deploy via Helm</div>
+                            <div class="step-desc">
+                                kubectl + Helm deploy into dev / staging / prod namespaces.
+                            </div>
+                            <span class="step-number">04</span>
+                        </div>
+                    </div>
+                </article>
+
+                <!-- Right: dev / staging / prod -->
+                <article class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Promotion model</h3>
+                        <span class="card-badge">Single EKS · 3 namespaces</span>
+                    </div>
+                    <div class="env-grid">
+                        <div class="env-card">
+                            <div class="env-card-header">
+                                <div class="env-chip">
+                                    <span class="env-dot"></span>
+                                    <span>dev</span>
+                                </div>
+                                <span class="card-badge">auto deploy</span>
+                            </div>
+                            <p class="env-card-desc">
+                                Latest passing build is deployed automatically. Good for quick checks.
+                            </p>
+                            <div class="env-card-meta">
+                                <span>Approvals: <strong>0</strong></span>
+                                <span>Traffic: <strong>internal</strong></span>
+                            </div>
+                        </div>
+
+                        <div class="env-card">
+                            <div class="env-card-header">
+                                <div class="env-chip">
+                                    <span class="env-dot staging"></span>
+                                    <span>staging</span>
+                                </div>
+                                <span class="card-badge">manual approval</span>
+                            </div>
+                            <p class="env-card-desc">
+                                Mirrors production configuration. Requires Azure DevOps environment approval.
+                            </p>
+                            <div class="env-card-meta">
+                                <span>Approvals: <strong>1+</strong></span>
+                                <span>Traffic: <strong>pre-prod</strong></span>
+                            </div>
+                        </div>
+
+                        <div class="env-card">
+                            <div class="env-card-header">
+                                <div class="env-chip">
+                                    <span class="env-dot prod"></span>
+                                    <span>prod</span>
+                                </div>
+                                <span class="card-badge">protected</span>
+                            </div>
+                            <p class="env-card-desc">
+                                Only images with valid Cosign signatures and passing policies are deployed.
+                            </p>
+                            <div class="env-card-meta">
+                                <span>Approvals: <strong>2+</strong></span>
+                                <span>Traffic: <strong>real users</strong></span>
+                            </div>
+                        </div>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <!-- SECURITY SECTION -->
+        <section id="security" class="section">
+            <div class="section-header">
+                <h2 class="section-title">Security & policy</h2>
+                <p class="section-subtitle">
+                    In this exercise the main focus is <strong>secure image signing with Cosign</strong>.
+                    On top of that, the design is ready to plug in <strong>OPA policies</strong> (for example
+                    in an admission controller or as a dedicated policy stage in the pipeline) to enforce
+                    additional rules on what is allowed to run in the cluster.
+                </p>
+            </div>
+
+            <div class="pipeline-grid">
+                <article class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">Image integrity</h3>
+                        <span class="card-badge">Cosign + ECR</span>
+                    </div>
+                    <p class="section-subtitle" style="margin-bottom:8px;">
+                        Every image pushed to ECR is signed with Cosign. Before each deploy, the pipeline
+                        uses the public key to verify that the digest matches the original artifact.
+                    </p>
+                    <div class="tags-row">
+                        <span class="tag">cosign sign <span>$(IMAGE)</span></span>
+                        <span class="tag">cosign verify <span>$(IMAGE)</span></span>
+                        <span class="tag">immutable tags</span>
+                        <span class="tag">digest-based deploys</span>
+                    </div>
+                </article>
+
+                <article class="card">
+                    <div class="card-header">
+                        <h3 class="card-title">OPA policy options</h3>
+                        <span class="card-badge">OPA + Renovate</span>
+                    </div>
+                    <p class="section-subtitle" style="margin-bottom:8px;">
+                        While Cosign is the core of this challenge, OPA could be used to add extra guardrails
+                        either in-cluster (admission controller) or as a dedicated policy stage in the pipeline.
+                        Typical policies for this setup could be:
+                    </p>
+                    <ul class="section-subtitle" style="margin-left:16px; margin-bottom:6px;">
+                        <li>Only allow containers whose images are <strong>signed by the expected Cosign key</strong>.
+                        </li>
+                        <li>Enforce <strong>allowed registries</strong> (e.g. only this AWS ECR account).</li>
+                        <li>Block deployments if the last security scan still has <strong>CRITICAL
+                                vulnerabilities</strong>.</li>
+                        <li>Restrict which teams can deploy into <strong>prod namespace</strong>.</li>
+                        <li>Ensure labels/annotations for <strong>traceability and auditability</strong> are present.
+                        </li>
+                    </ul>
+                    <div class="tags-row">
+                        <span class="tag">opa gate in pipeline</span>
+                        <span class="tag">only trusted registries</span>
+                        <span class="tag">signed-images-only</span>
+                        <span class="tag">renovate · azure platform</span>
+                    </div>
+                </article>
+            </div>
+        </section>
+
+        <!-- RUNTIME STATUS SECTION -->
+        <section id="status" class="section">
+            <div class="section-header">
+                <h2 class="section-title">Runtime status</h2>
+                <p class="section-subtitle">
+                    High-level health for the <strong>EKS cluster</strong> and the
+                    <strong>Azure DevOps pipeline</strong>, fetched from lightweight
+                    backend endpoints so the UI always shows the latest state.
+                </p>
+            </div>
+
+            <div class="pipeline-grid">
+                <!-- EKS health -->
+                <article class="card" id="eks-card">
+                    <div class="card-header">
+                        <h3 class="card-title">EKS cluster</h3>
+                        <span class="card-badge">nn-devops-challenge-cluster</span>
+                    </div>
+
+                    <div class="tags-row" style="margin-bottom:6px;">
+                        <span class="tag">region: <span>eu-west-1</span></span>
+                        <span class="tag">namespaces: <span>dev · staging · prod</span></span>
+                    </div>
+
+                    <div id="eks-status-row">
+                        <p class="section-subtitle" style="margin-bottom:6px;">
+                            Checking cluster API and node group status…
+                        </p>
+                        <div class="status-line">
+                            <span class="status-pill status-pill-loading" id="eks-status-pill">
+                                <span class="status-dot"></span>
+                                <span id="eks-status-text">Loading…</span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <p class="status-meta" id="eks-status-meta">
+                        Last update: <span>–</span>
+                    </p>
+                </article>
+
+                <!-- Azure DevOps health -->
+                <article class="card" id="azdo-card">
+                    <div class="card-header">
+                        <h3 class="card-title">Azure DevOps pipeline</h3>
+                        <span class="card-badge">build → scan → sign → deploy</span>
+                    </div>
+
+                    <div class="tags-row" style="margin-bottom:6px;">
+                        <span class="tag">project: <span>NN DevOps Challenge</span></span>
+                        <span class="tag">pipeline: <span>nn-devops-challenge-ci</span></span>
+                    </div>
+
+                    <div id="azdo-status-row">
+                        <p class="section-subtitle" style="margin-bottom:6px;">
+                            Fetching last run result and current stage…
+                        </p>
+                        <div class="status-line">
+                            <span class="status-pill status-pill-loading" id="azdo-status-pill">
+                                <span class="status-dot"></span>
+                                <span id="azdo-status-text">Loading…</span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <p class="status-meta" id="azdo-status-meta">
+                        Last update: <span>–</span>
+                    </p>
+                </article>
+            </div>
+        </section>
+
+        <footer>
+            <span>Spring Boot · Terraform · EKS · ECR · Helm · Cosign · Trivy · Azure DevOps</span>
+            <span>Cluster: <a href="#">nn-devops-challenge-cluster</a></span>
+        </footer>
+    </main>
+
+    <!-- MODAL: Azure DevOps pipeline YAML -->
+    <div class="modal-backdrop" id="pipeline-modal">
+        <div class="modal" role="dialog" aria-modal="true" aria-labelledby="pipeline-modal-title">
+            <div class="modal-header">
+                <div>
+                    <div class="modal-title" id="pipeline-modal-title">Azure DevOps pipeline</div>
+                    <div class="modal-subtitle">
+                        Single pipeline implementing: build → scan (CRITICAL only) → sign → push → promote (dev →
+                        staging → prod) → Helm deploy to EKS.
+                    </div>
+                </div>
+                <button class="modal-close-btn" type="button" data-close-pipeline-modal="true"
+                    aria-label="Close pipeline modal">
+                    ×
+                </button>
+            </div>
+            <div class="modal-body">
+                <pre class="modal-pre">
+trigger:
+  - main
+
+pr:
+  - main
+
+schedules:
+  - cron: "0 2 * * *"
+    displayName: Nightly Renovate
+    branches:
+      include:
+        - main
+    always: true
+
+variables:
+  IMAGE_NAME: 'nn-devops-challenge'
+  IMAGE_TAG: '$(Build.BuildNumber)'
+  ECR_REPO: 'nn-devops-challenge'
+  AWS_REGION: '$(AWS_REGION)'
+  AWS_ACCOUNT_ID: '$(AWS_ACCOUNT_ID)'
+  CONTAINER_REGISTRY: '$(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com'
+  IMAGE_FULL: '$(CONTAINER_REGISTRY)/$(ECR_REPO):$(IMAGE_TAG)'
+  RUN_RENOVATE: 'false'
+
+# Stage 0 – Terraform (EKS + ECR + IAM)
+- stage: ProvisionInfra
+  displayName: "Provision AWS Infrastructure (EKS + ECR + IAM)"
+  condition: ne(variables['Build.Reason'], 'Schedule')
+  jobs:
+    - job: terraform_apply
+      pool:
+        vmImage: 'ubuntu-latest'
+      steps:
+        - checkout: self
+
+        - task: TerraformInstaller@1
+          inputs:
+            terraformVersion: '1.13.5'
+
+        - script: |
+            set -euo pipefail
+            cd infra
+            terraform init
+            terraform plan -var-file="envs/dev/terraform.tfvars" -out=tfplan
+            terraform show -no-color tfplan
+            terraform apply tfplan
+          displayName: "Terraform plan + apply (dev only)"
+          env:
+            AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+            AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+            AWS_REGION: $(AWS_REGION)
+
+        - script: |
+            cd infra
+            terraform output -json > tf_outputs.json
+            echo "##vso[task.setvariable variable=ECR_REPO_URL;isOutput=true]$(jq -r .ecr_repository_url.value tf_outputs.json)"
+            echo "##vso[task.setvariable variable=EKS_CLUSTER_NAME_DEV;isOutput=true]$(jq -r .eks_cluster_name.value tf_outputs.json)"
+          name: setTerraformOutputs
+          displayName: "Export Terraform outputs"
+
+# Stage 1 – Renovate
+- stage: Renovate
+  displayName: "Renovate dependencies"
+  condition: or(eq(variables['Build.Reason'], 'Schedule'), eq(variables['RUN_RENOVATE'], 'true'))
+  jobs:
+    - job: renovate
+      pool:
+        vmImage: 'ubuntu-latest'
+      steps:
+        - checkout: self
+        - bash: |
+            set -euo pipefail
+            docker run --rm \
+              -e RENOVATE_TOKEN=$(RENOVATE_TOKEN) \
+              -e RENOVATE_PLATFORM=azure \
+              -e RENOVATE_ENDPOINT=https://dev.azure.com \
+              -e LOG_LEVEL=info \
+              ghcr.io/renovatebot/renovate:latest \
+              "$(System.CollectionUri)$(System.TeamProject)/_git/$(Build.Repository.Name)"
+          displayName: "Run Renovate"
+          env:
+            RENOVATE_TOKEN: $(RENOVATE_TOKEN)
+
+# Stage 2 – Build, test & Trivy (CRITICAL only)
+- stage: BuildTestScan
+  displayName: "Build, test & security scan"
+  condition: ne(variables['Build.Reason'], 'Schedule')
+  jobs:
+    - job: build_test_scan
+      pool:
+        vmImage: 'ubuntu-latest'
+      steps:
+        - checkout: self
+        - bash: |
+            set -euo pipefail
+            make test
+          displayName: "Maven tests"
+        - bash: |
+            set -euo pipefail
+            docker build -f app/Dockerfile -t "$(IMAGE_FULL)" app
+          displayName: "Build Docker image"
+        - bash: |
+            set -euo pipefail
+            if ! command -v trivy >/dev/null 2>&1; then
+              curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+                | sh -s -- -b /usr/local/bin
+            fi
+            trivy image --severity CRITICAL --exit-code 1 --no-progress "$(IMAGE_FULL)"
+          displayName: "Trivy scan (CRITICAL only)"
+        - publish: $(Build.SourcesDirectory)
+          artifact: src
+
+# Stage 3 – Push to ECR & Cosign
+- stage: PushAndSign
+  displayName: "Push to ECR & Cosign"
+  dependsOn: BuildTestScan
+  condition: succeeded()
+  jobs:
+    - job: push_sign
+      pool:
+        vmImage: 'ubuntu-latest'
+      steps:
+        - download: current
+          artifact: src
+        - bash: |
+            set -euo pipefail
+            aws ecr describe-repositories --repository-names "$(ECR_REPO)" --region "$(AWS_REGION)" >/dev/null 2>&1 \
+              || aws ecr create-repository --repository-name "$(ECR_REPO)" --region "$(AWS_REGION)" >/dev/null
+            aws ecr get-login-password --region "$(AWS_REGION)" \
+              | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
+            docker images | grep -q "$(IMAGE_FULL)" || docker build -f app/Dockerfile -t "$(IMAGE_FULL)" app
+            docker push "$(IMAGE_FULL)"
+            echo "$(IMAGE_FULL)" > image.txt
+          displayName: "Push image to ECR"
+          env:
+            AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+            AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+            AWS_REGION: $(AWS_REGION)
+        - bash: |
+            set -euo pipefail
+            curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 \
+              -o cosign && chmod +x cosign && sudo mv cosign /usr/local/bin/
+            echo "$(COSIGN_PRIVATE_KEY_B64)" | base64 -d > cosign.key
+            echo "$(COSIGN_PUBLIC_KEY_B64)"  | base64 -d > cosign.pub
+            COSIGN_PASSWORD="${COSIGN_PASSWORD:-}" cosign sign --key cosign.key "$(IMAGE_FULL)"
+          displayName: "Cosign sign image"
+        - bash: |
+            set -euo pipefail
+            curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 \
+              -o cosign && chmod +x cosign && sudo mv cosign /usr/local/bin/
+            echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
+            cosign verify --key cosign.pub "$(IMAGE_FULL)"
+          displayName: "Cosign verify (gate)"
+        - task: PublishBuildArtifacts@1
+          inputs:
+            pathToPublish: image.txt
+            artifactName: image-ref
+
+# Stage 4 – Deploy to dev (namespace dev)
+- stage: Deploy_Dev
+  displayName: "Deploy to dev"
+  dependsOn: PushAndSign
+  condition: succeeded()
+  jobs:
+    - deployment: deploy_dev
+      environment: "dev"
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - download: current
+                artifact: image-ref
+              - bash: echo "IMAGE=$(cat $(Pipeline.Workspace)/image-ref/image.txt)" >> $(Pipeline.Workspace)/image.env
+              - bash: |
+                  set -euo pipefail
+                  source $(Pipeline.Workspace)/image.env
+                  curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 \
+                    -o cosign && chmod +x cosign && sudo mv cosign /usr/local/bin/
+                  echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
+                  cosign verify --key cosign.pub "${IMAGE}"
+                displayName: "Verify signature (dev gate)"
+              - bash: |
+                  set -euo pipefail
+                  source $(Pipeline.Workspace)/image.env
+                  aws eks update-kubeconfig --region "$(AWS_REGION)" --name "$(CLUSTER_NAME_DEV)"
+                  command -v helm >/dev/null || (curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash)
+                  ./scripts/deploy.sh dev "${IMAGE}" ./helm/nn-devops-challenge
+                displayName: "Helm deploy to dev"
+                env:
+                  AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+                  AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+                  AWS_REGION: $(AWS_REGION)
+
+# Stage 5 – Deploy to staging (namespace staging)
+- stage: Deploy_Staging
+  displayName: "Deploy to staging"
+  dependsOn: Deploy_Dev
+  condition: succeeded()
+  jobs:
+    - deployment: deploy_staging
+      environment: "staging"
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - download: current
+                artifact: image-ref
+              - bash: echo "IMAGE=$(cat $(Pipeline.Workspace)/image-ref/image.txt)" >> $(Pipeline.Workspace)/image.env
+              - bash: |
+                  set -euo pipefail
+                  source $(Pipeline.Workspace)/image.env
+                  curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 \
+                    -o cosign && chmod +x cosign && sudo mv cosign /usr/local/bin/
+                  echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
+                  cosign verify --key cosign.pub "${IMAGE}"
+                displayName: "Verify signature (staging gate)"
+              - bash: |
+                  set -euo pipefail
+                  source $(Pipeline.Workspace)/image.env
+                  aws eks update-kubeconfig --region "$(AWS_REGION)" --name "$(CLUSTER_NAME_DEV)"
+                  command -v helm >/dev/null || (curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash)
+                  ./scripts/deploy.sh staging "${IMAGE}" ./helm/nn-devops-challenge
+                displayName: "Helm deploy to staging"
+                env:
+                  AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+                  AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+                  AWS_REGION: $(AWS_REGION)
+
+# Stage 6 – Deploy to prod (namespace prod)
+- stage: Deploy_Prod
+  displayName: "Deploy to prod"
+  dependsOn: Deploy_Staging
+  condition: succeeded()
+  jobs:
+    - deployment: deploy_prod
+      environment: "prod"
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - download: current
+                artifact: image-ref
+              - bash: echo "IMAGE=$(cat $(Pipeline.Workspace)/image-ref/image.txt)" >> $(Pipeline.Workspace)/image.env
+              - bash: |
+                  set -euo pipefail
+                  source $(Pipeline.Workspace)/image.env
+                  curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 \
+                    -o cosign && chmod +x cosign && sudo mv cosign /usr/local/bin/
+                  echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
+                  cosign verify --key cosign.pub "${IMAGE}"
+                displayName: "Verify signature (prod gate)"
+              - bash: |
+                  set -euo pipefail
+                  source $(Pipeline.Workspace)/image.env
+                  aws eks update-kubeconfig --region "$(AWS_REGION)" --name "$(CLUSTER_NAME_DEV)"
+                  command -v helm >/dev/null || (curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash)
+                  ./scripts/deploy.sh prod "${IMAGE}" ./helm/nn-devops-challenge
+                displayName: "Helm deploy to prod"
+                env:
+                  AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+                  AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+                  AWS_REGION: $(AWS_REGION)
+</pre>
+
+            </div>
+            <div class="modal-footer">
+                <span># single pipeline · image re-used across dev → staging → prod</span>
+                <span># cosign + trivy + helm + kubectl</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function fetchStatus(url, onSuccess, onError) {
+            try {
+                const res = await fetch(url, { cache: "no-store" });
+                if (!res.ok) {
+                    throw new Error("HTTP " + res.status);
+                }
+                const data = await res.json();
+                onSuccess(data);
+            } catch (err) {
+                console.error("Status fetch failed:", url, err);
+                if (onError) onError(err);
+            }
+        }
+
+        function updateStatusPill(id, status) {
+            const pill = document.getElementById(id);
+            if (!pill) return;
+
+            pill.classList.remove("status-pill-loading", "status-pill-ok", "status-pill-warn", "status-pill-error");
+
+            let label = "Unknown";
+            let cls = "status-pill-warn";
+
+            switch ((status || "").toUpperCase()) {
+                case "HEALTHY":
+                case "OK":
+                case "SUCCEEDED":
+                    label = "Healthy";
+                    cls = "status-pill-ok";
+                    break;
+                case "DEGRADED":
+                case "UNSTABLE":
+                    label = "Degraded";
+                    cls = "status-pill-warn";
+                    break;
+                case "FAILED":
+                case "ERROR":
+                    label = "Failed";
+                    cls = "status-pill-error";
+                    break;
+                default:
+                    label = status || "Unknown";
+                    cls = "status-pill-warn";
+            }
+
+            pill.classList.add(cls);
+            const spanText = pill.querySelector("span:nth-child(2)");
+            if (spanText) spanText.textContent = label;
+        }
+
+        function updateStatusMeta(id, timestamp) {
+            const el = document.getElementById(id);
+            if (!el) return;
+            const span = el.querySelector("span");
+            if (!span) return;
+
+            const d = timestamp ? new Date(timestamp) : new Date();
+            span.textContent = d.toISOString();
+        }
+
+        function initPipelineModal() {
+            const modal = document.getElementById("pipeline-modal");
+            if (!modal) return;
+
+            const openers = document.querySelectorAll("[data-open-pipeline-modal]");
+            const closers = modal.querySelectorAll("[data-close-pipeline-modal]");
+            const backdrop = modal;
+
+            const open = (e) => {
+                if (e) e.preventDefault();
+                modal.classList.add("open");
+                document.body.style.overflow = "hidden";
+            };
+
+            const close = (e) => {
+                if (e) e.preventDefault();
+                modal.classList.remove("open");
+                document.body.style.overflow = "";
+            };
+
+            openers.forEach((btn) => btn.addEventListener("click", open));
+            closers.forEach((btn) => btn.addEventListener("click", close));
+
+            backdrop.addEventListener("click", (e) => {
+                if (e.target === backdrop) close(e);
+            });
+
+            document.addEventListener("keydown", (e) => {
+                if (e.key === "Escape" && modal.classList.contains("open")) {
+                    close(e);
+                }
+            });
+        }
+
+        document.addEventListener("DOMContentLoaded", () => {
+            // EKS cluster status
+            fetchStatus(
+                "/status/eks",
+                (data) => {
+                    updateStatusPill("eks-status-pill", data.status || "UNKNOWN");
+                    updateStatusMeta("eks-status-meta", data.timestamp);
+                },
+                () => {
+                    updateStatusPill("eks-status-pill", "FAILED");
+                    updateStatusMeta("eks-status-meta", null);
+                }
+            );
+
+            // Azure DevOps pipeline status
+            fetchStatus(
+                "/status/pipeline",
+                (data) => {
+                    updateStatusPill("azdo-status-pill", data.status || "UNKNOWN");
+                    updateStatusMeta("azdo-status-meta", data.timestamp);
+                },
+                () => {
+                    updateStatusPill("azdo-status-pill", "FAILED");
+                    updateStatusMeta("azdo-status-meta", null);
+                }
+            );
+
+            initPipelineModal();
+        });
+    </script>
+
+</body>
+
+</html>
