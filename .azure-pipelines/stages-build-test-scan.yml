@@ -1,13 +1,10 @@
-# .azure-pipelines/stages-build-test-scan.yml
-parameters: {}
-
 stages:
 - stage: BuildTestScan
   displayName: Build, Test & Security Scan
   condition: ne(variables['Build.Reason'], 'Schedule')
   jobs:
   - job: build_test_scan
-    displayName: Build, Unit Tests & Trivy
+    displayName: Build + Tests + Trivy
     pool:
       name: 'sofia-self-hosted'
     steps:
@@ -55,4 +52,4 @@ stages:
 
     - publish: $(Build.SourcesDirectory)
       artifact: src
-      displayName: Publish source as artifact
+      displayName: Publish source artifact

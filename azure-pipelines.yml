@@ -3,10 +3,10 @@ trigger:
     include:
       - '*'
     exclude:
-      - main
+      - main          
 
 pr:
-- main
+- main                
 
 variables:
   IMAGE_NAME: 'nn-devops-challenge'
@@ -51,19 +51,13 @@ stages:
         env:
           RENOVATE_TOKEN: $(RENOVATE_TOKEN)
 
-  # ===========================
-  # STAGE 1 — BUILD + TEST + TRIVY
-  # ===========================
+  # 1) Build + tests + Trivy
   - template: .azure-pipelines/stages-build-test-scan.yml
 
-  # ===========================
-  # STAGE 2 — PUSH TO ECR + COSIGN
-  # ===========================
+  # 2) Push a ECR + Cosign 
   - template: .azure-pipelines/stages-push-and-sign.yml
 
-  # ===========================
-  # STAGE 3 — DEPLOY DEV 
-  # ===========================
+  # 3) Deploy DEV
   - template: .azure-pipelines/stages-deploy.yml
     parameters:
       stageName: 'Deploy_Dev'
@@ -73,11 +67,9 @@ stages:
       namespaceVar: '$(NAMESPACE_DEV)'
       clusterNameVar: '$(CLUSTER_NAME_DEV)'
       dependsOnStage: 'PushAndSign'
-      extraCondition: "and(succeeded(), or(eq(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranch'], 'refs/heads/main')))"
+      extraCondition: "not(in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))"
 
-  # ===========================
-  # STAGE 4 — DEPLOY STAGING 
-  # ===========================
+  # 4) Deploy STAGING
   - template: .azure-pipelines/stages-deploy.yml
     parameters:
       stageName: 'Deploy_Staging'
@@ -87,11 +79,9 @@ stages:
       namespaceVar: '$(NAMESPACE_STAGING)'
       clusterNameVar: '$(CLUSTER_NAME_STAGING)'
       dependsOnStage: 'Deploy_Dev'
-      extraCondition: "and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))"
+      extraCondition: "and(eq(variables['Build.SourceBranch'], 'refs/heads/main'), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'))"
 
-  # ===========================
-  # STAGE 5 — DEPLOY PROD
-  # ===========================
+  # 5) Deploy PROD
   - template: .azure-pipelines/stages-deploy.yml
     parameters:
       stageName: 'Deploy_Prod'
@@ -101,4 +91,4 @@ stages:
       namespaceVar: '$(NAMESPACE_PROD)'
       clusterNameVar: '$(CLUSTER_NAME_PROD)'
       dependsOnStage: 'Deploy_Staging'
-      extraCondition: "and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))"
+      extraCondition: "and(eq(variables['Build.SourceBranch'], 'refs/heads/main'), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'))"
