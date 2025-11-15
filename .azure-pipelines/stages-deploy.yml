@@ -57,7 +57,7 @@ stages:
                 kubectl create namespace "${NAMESPACE}"
 
               ./scripts/deploy.sh "${{ parameters.envName }}" "${IMAGE}" ./helm "${NAMESPACE}"
-            displayName: Helm deploy to ${{ parameters.envName | upper }}
+            displayName: Helm deploy to ${{ parameters.envName }}
             env:
               AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
               AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
