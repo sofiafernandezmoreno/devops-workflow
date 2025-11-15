@@ -1,11 +1,10 @@
-# .azure-pipelines/stages-push-and-sign.yml
 parameters: {}
 
 stages:
 - stage: PushAndSign
   displayName: Push to ECR & Cosign
   dependsOn: BuildTestScan
-  condition: and(succeeded(), or(eq(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranch'], 'refs/heads/main')))
+  condition: and(succeeded(),not(in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI')))
   jobs:
   - job: push_sign
     displayName: Push image to ECR & Cosign
@@ -51,9 +50,7 @@ stages:
         targetType: inline
         script: |
           set -euo pipefail
-
-          # Cosign
-          curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 -o cosign
+          curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
           chmod +x cosign
           sudo mv cosign /usr/local/bin/
 
@@ -68,13 +65,11 @@ stages:
         targetType: inline
         script: |
           set -euo pipefail
-
-          curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 -o cosign
+          curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
           chmod +x cosign
           sudo mv cosign /usr/local/bin/
 
           echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
-
           cosign verify --key cosign.pub "$(IMAGE_FULL)"
 
     - task: PublishBuildArtifacts@1

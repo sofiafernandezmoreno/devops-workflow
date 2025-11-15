@@ -1,13 +1,10 @@
-# .azure-pipelines/stages-build-test-scan.yml
-parameters: {}
-
 stages:
 - stage: BuildTestScan
   displayName: Build, Test & Security Scan
   condition: ne(variables['Build.Reason'], 'Schedule')
   jobs:
   - job: build_test_scan
-    displayName: Build, Unit Tests & Trivy
+    displayName: Build + Tests + Trivy
     pool:
       name: 'sofia-self-hosted'
     steps:
@@ -37,22 +34,11 @@ stages:
         targetType: inline
         script: |
           set -euo pipefail
-
-          mkdir -p "$HOME/.local/bin"
-          export PATH="$HOME/.local/bin:$PATH"
-
           if ! command -v trivy >/dev/null 2>&1; then
-            echo "Installing Trivy locally into \$HOME/.local/bin..."
-            curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-              | sh -s -- -b "$HOME/.local/bin"
+            brew install trivy || true
           fi
-
-          echo "Trivy version:"
-          trivy --version
-
-          echo "Running Trivy scan on image: $(IMAGE_FULL)"
           trivy image --severity CRITICAL --exit-code 1 --no-progress "$(IMAGE_FULL)"
 
     - publish: $(Build.SourcesDirectory)
       artifact: src
-      displayName: Publish source as artifact
+      displayName: Publish source artifact

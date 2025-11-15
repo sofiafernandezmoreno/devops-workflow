@@ -1,24 +1,20 @@
-# .azure-pipelines/stages-deploy.yml
 parameters:
   stageName: ''
   displayName: ''
-  envName: ''            # dev / staging / prod
-  environmentName: ''    # Environment in Azure DevOps
-  namespaceVar: ''       # p.ej. $(NAMESPACE_DEV)
-  clusterNameVar: ''     # p.ej. $(CLUSTER_NAME_DEV)
-  dependsOnStage: ''     # p.ej. PushAndSign / Deploy_Dev / Deploy_Staging
-  extraCondition: 'succeeded()'
+  envName: ''
+  environmentName: ''
+  namespaceVar: ''
+  clusterNameVar: ''
+  dependsOnStage: ''
+  extraCondition: 'true'
 
 stages:
 - stage: ${{ parameters.stageName }}
   displayName: ${{ parameters.displayName }}
   dependsOn: ${{ parameters.dependsOnStage }}
-  condition: ${{ parameters.extraCondition }}
+  condition: and(succeeded(), ${{ parameters.extraCondition }})
   jobs:
-  - deployment: deploy_job
-    displayName: Deploy ${{ parameters.envName }}
-    pool:
-      name: 'sofia-self-hosted'
+  - deployment: deploy_${{ parameters.envName }}
     environment: ${{ parameters.environmentName }}
     strategy:
       runOnce:
@@ -26,7 +22,7 @@ stages:
           steps:
           - download: current
             artifact: image-ref
-            displayName: Download image-ref artifact
+            displayName: Download image-ref
 
           - bash: |
               set -euo pipefail
@@ -38,7 +34,7 @@ stages:
               set -euo pipefail
               source $(Pipeline.Workspace)/image.env
 
-              curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 -o cosign
+              curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
               chmod +x cosign
               sudo mv cosign /usr/local/bin/
 
@@ -50,18 +46,18 @@ stages:
               set -euo pipefail
               source $(Pipeline.Workspace)/image.env
 
-              CLUSTER_NAME=${{ parameters.clusterNameVar }}
-              NAMESPACE=${{ parameters.namespaceVar }}
+              CLUSTER_NAME="${{ parameters.clusterNameVar }}"
+              NAMESPACE="${{ parameters.namespaceVar }}"
 
-              # Kubeconfig
               aws eks update-kubeconfig --region "$(AWS_REGION)" --name "${CLUSTER_NAME}"
 
-              # Namespace
+              command -v helm >/dev/null || (curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash)
+
               kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || \
                 kubectl create namespace "${NAMESPACE}"
 
-              ./scripts/deploy.sh ${{ parameters.envName }} "${IMAGE}" ./helm "${NAMESPACE}"
-            displayName: Helm deploy to ${{ parameters.envName }}
+              ./scripts/deploy.sh "${{ parameters.envName }}" "${IMAGE}" ./helm "${NAMESPACE}"
+            displayName: Helm deploy to ${{ parameters.envName | upper }}
             env:
               AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
               AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
