@@ -15,8 +15,13 @@ AWS_REGION    ?= eu-west-1
 
 TF_VARS_FILE  := $(TERRAFORM_DIR)/envs/$(ENV)/terraform.tfvars
 
+# Helm / deploy
+CHART_PATH    ?= helm/nn-devops-challenge/app
+DEPLOY_SCRIPT ?= scripts/deploy.sh
+
 .PHONY: test build scan push sign verify \
-        tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate
+        tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate \
+        deploy-dev deploy-staging deploy-prod
 
 # =========================
 # Java / Docker targets
@@ -74,3 +79,16 @@ tf-fmt:
 tf-validate:
 	cd $(TERRAFORM_DIR) && \
 	AWS_PROFILE=$(AWS_PROFILE) AWS_REGION=$(AWS_REGION) terraform validate
+
+# =========================
+# Local Kubernetes deploy helpers
+# =========================
+
+deploy-dev:
+	./$(DEPLOY_SCRIPT) dev "$(IMAGE)" "$(CHART_PATH)"
+
+deploy-staging:
+	./$(DEPLOY_SCRIPT) staging "$(IMAGE)" "$(CHART_PATH)"
+
+deploy-prod:
+	./$(DEPLOY_SCRIPT) prod "$(IMAGE)" "$(CHART_PATH)"

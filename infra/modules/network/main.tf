@@ -5,7 +5,7 @@ data "aws_vpc" "default" {
 }
 
 data "aws_subnets" "default" {
-  count      = var.use_default_vpc ? 1 : 0
+  count = var.use_default_vpc ? 1 : 0
   filter {
     name   = "vpc-id"
     values = [data.aws_vpc.default[0].id]
@@ -18,7 +18,7 @@ resource "aws_vpc" "new" {
   cidr_block           = "10.0.0.0/16"
   enable_dns_support   = true
   enable_dns_hostnames = true
-  tags = { Project = var.project }
+  tags                 = { Project = var.project }
 }
 
 resource "aws_subnet" "new" {

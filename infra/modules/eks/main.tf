@@ -19,8 +19,8 @@ module "eks" {
 
   enable_irsa = true
 
-  cluster_endpoint_public_access  = true
-  cluster_endpoint_private_access = false
+  cluster_endpoint_public_access       = true
+  cluster_endpoint_private_access      = false
   cluster_endpoint_public_access_cidrs = var.admin_cidrs
 
   eks_managed_node_groups = {
@@ -29,7 +29,7 @@ module "eks" {
       max_size     = 1
       desired_size = 1
 
-      instance_types = ["t4g.small"]
+      instance_types = ["t3.small"]
     }
   }
 
