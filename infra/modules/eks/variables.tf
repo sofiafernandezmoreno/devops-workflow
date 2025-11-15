@@ -22,3 +22,8 @@ variable "admin_cidrs" {
   type        = list(string)
   description = "CIDRs allowed to access the EKS public endpoint."
 }
+
+variable "admin_user_arn" {
+  type        = string
+  description = "IAM ARN with admin access to the EKS cluster"
+}
