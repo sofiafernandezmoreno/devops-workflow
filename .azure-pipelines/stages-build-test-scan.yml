@@ -7,7 +7,7 @@ stages:
   jobs:
   - job: build_test_scan
     pool:
-      vmImage: 'ubuntu-latest'
+      name: 'sofia-self-hosted'
     steps:
     - checkout: self
 
