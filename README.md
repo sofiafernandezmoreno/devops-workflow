@@ -91,115 +91,123 @@ Terraform provisions:
 
 * EKS clusters (dev, staging, prod)
 * Managed node groups
-* OIDC Provider for IRSA
-* ECR repository
+* OIDC (IRSA) for pod-level IAM
+* ECR private registry
 * IAM roles for EKS, nodes, and the CI/CD pipeline
 * Optional default VPC usage
 * CloudWatch log groups
-* KMS Key for cluster encryption
-* S3 remote backend with DynamoDB locking
+* KMS-encrypted cluster secrets & objects
+* S3 backend for Terraform state + DynamoDB lock
 
 ## 🗺️ Architecture Diagram (Infrastructure)
 
 ```mermaid
 flowchart TD
-    A[Azure DevOps Pipeline] -->|AWS Credentials| B[AWS IAM User]
 
-    subgraph AWS Account
-        B --> C[ECR Repository<br>nn-devops-challenge]
-        B --> D[S3 Backend Terraform State + DynamoDB Lock]
-        B --> E[EKS Cluster]
-        E --> F[Node Group ]
-        E --> G[OIDC Provider]
-        E --> H[CloudWatch Logs]
-        I[VPC] --> E
-    end
+subgraph Azure DevOps
+  A[Azure DevOps Pipeline] --> B[Build Artifacts<br>Docker Image + Signature]
+end
 
-    C -->|Signed Images| E
+subgraph AWS_Account
+  C[S3 Backend + DynamoDB Lock]:::infra
+  D[ECR Repository]:::infra
+  E[EKS Cluster]:::cluster
+  F[Node Groups]:::cluster
+  G[OIDC Provider]:::cluster
+  H[KMS Key]:::security
+  I[VPC + Subnets]:::network
+
+  E --> F
+  E --> G
+  E --> H
+
+  D --> E
+end
+
+A --> D
+A --> C
+
+classDef infra fill:#0e7490,stroke:#0f172a,color:white;
+classDef cluster fill:#1d4ed8,stroke:#0f172a,color:white;
+classDef network fill:#15803d,stroke:#0f172a,color:white;
+classDef security fill:#be123c,stroke:#0f172a,color:white;
+
 ```
 
 ## 🐳 CI/CD Pipeline Diagram (Azure DevOps)
 
 ```mermaid
 flowchart LR
-    A[Build Stage] --> B[Security Scan]
-    B --> C[Sign Image]
-    C --> D[Push to ECR]
-    D --> E{Promote to Staging?}
-    E -->|Manual Approval| F[Deploy to Staging]
-    F --> G{Promote to Prod?}
-    G -->|Manual Approval| H[Deploy to Prod]
-```
 
-## 🔧 Pipeline Stages Explained
+A[Pull Request Validation] --> B[Build]
+B --> C[Docker Build]
+C --> D[Trivy Scan]
+D --> E[Cosign Sign]
+E --> F[Push to ECR]
 
-### **Stage 1 – Build**
-- Build Java project  
-- Build Docker image  
+F --> G{Deploy to Dev?}
+G --> H[Helm Deploy to Dev]
 
-### **Stage 2 – Security Scan (Trivy)**
+H --> I{Promote to Staging?}
+I -->|Manual Approval| J[Deploy to Staging]
 
-```
-trivy image --severity CRITICAL --exit-code 1
-```
-
-### **Stage 3 – Cosign Signing**
+J --> K{Promote to Prod?}
+K -->|Manual Approval| L[Deploy to Prod]
 
 ```
-cosign sign --key cosign.key $IMAGE
-```
 
-### **Stage 4 – Push to ECR**
+## 🔐 Security & Supply Chain Protection
 
-```
-aws ecr get-login-password | docker login
-docker push $IMAGE
-```
+This solution integrates multiple layers of security:
 
-### **Stage 5 – Promotion Gates**
-- Dev → staging → prod  
-- Azure DevOps manual approvals  
-- Cosign verification at every stage  
+### 1️⃣ Container Security (Trivy)
 
-### **Stage 6 – Deployment to EKS (Helm)**
+* Image scanned on each build
 
-```
-helm upgrade --install app ./helm/nn-devops-challenge \
-  --set image.repository=$IMAGE_REPO \
-  --set image.tag=$TAG \
-  --namespace nn-devops
+* Fails pipeline if CRITICAL vulnerabilities are detected
 
-```
+* Ensures secure base image and dependencies
+
+### 2️⃣ Image Signing (Cosign)
+
+* Images are signed with a private key
+
+* Signatures are uploaded to the registry
+
+* Verification gates prevent unsigned images from being deployed
+
+### 3️⃣ IAM Least Privilege
+
+* Isolated roles for:
+  * Terraform
+  * Node groups
+
+### 4️⃣ Secure Terraform Backend
+
+* S3 bucket with:
+  * versioning
+  * encryption at rest
+* DynamoDB table used for:
+  * state locking
 
 ## 🛠️ Makefile Commands (Local Automation)
 
-### Application tasks
-
 ```
-make test
+# App pipeline
 make build
+make test
 make scan
-make push
 make sign
+make push
 make verify
-```
 
-### Terraform tasks
-
-```
-# Init
+# IaC pipeline
 make tf-init ENV=dev
-
-# Plan
 make tf-plan ENV=dev
-
-# Apply (dev cluster used for the challenge)
 make tf-apply ENV=dev
-
-# Destroy (recommended for AWS Free Tier)
 make tf-destroy ENV=dev
-
 ```
+This avoids long CLI commands and standardizes developer workflows.
 
 ## 🧹 Cleanup Strategy (AWS Free Tier)
 
@@ -221,4 +229,4 @@ make tf-destroy ENV=dev
 
 ## Useful links
 
-* [Azure DevOps Pipelines Documentation](https://learn.microsoft.com/es-es/azure/devops/pipelines/?view=azure-devops)# test
+* [Azure DevOps Pipelines Documentation](https://learn.microsoft.com/es-es/azure/devops/pipelines/?view=azure-devops)
