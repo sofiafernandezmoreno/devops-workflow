@@ -225,3 +225,12 @@ override.tf.json
 .aws/config
 # Exclude Mac OS specific files
 .DS_Store
+
+# Cosign keys
+cosign.key*
+cosign.pub*
+*cosign.cert*
+
+# k8s cert
+*ca.crt*
+*k8s-cert*

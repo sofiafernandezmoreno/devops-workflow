@@ -6,11 +6,14 @@
 
 ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![Version: 1.0.0](https://img.shields.io/badge/Version-1.0.0-informational?style=flat-square)
 
+[![Build Status](https://dev.azure.com/sofia-nn-challenge/nn-devops-challenge/_apis/build/status%2Fsofiafernandezmoreno.nn-devops-challenge?branchName=main)](https://dev.azure.com/sofia-nn-challenge/nn-devops-challenge/_build/latest?definitionId=1&branchName=main)
+
 This repository implements a full DevOps workflow designed for the NN DevOps Challenge.
 Although the challenge only requires deploying a sample application to EKS, this solution goes further by providing a multi-environment production-ready setup, including:
 
 * Infrastructure as Code (Terraform)
-* Three isolated environments (dev, staging, prod) (only dev is used for the challenge exercise)
+* Three isolated clusters (dev, staging, prod) (only dev is used for the challenge exercise)
+* Used DEV clusters to promotes through dev --> staging --> prod using namespaces
 * Automated Docker build workflow for a SpringBoot app generated with https://start.spring.io/
 * Security scanning with Trivy
 * Image signing & verification using Cosign
