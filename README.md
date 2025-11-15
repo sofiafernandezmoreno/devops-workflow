@@ -227,6 +227,67 @@ Just run:
 make tf-destroy ENV=dev
 ```
 
+## Azure DevOps Self-Hosted Agent (Required Component)
+
+This project uses a **self-hosted Azure DevOps agent** to support all the tooling required for the CI/CD pipeline.  
+Microsoft-hosted agents do **not** allow privileged operations such as:
+
+- Docker build & push  
+- Cosign signing  
+- Terraform apply  
+- AWS CLI with persistent credentials  
+- Local artifacts caching  
+- Custom binaries installation  
+
+For this reason, the pipeline runs on a dedicated **self-hosted Linux agent** deployed on a secure environment.
+
+---
+
+### ✔️ Agent Capabilities Installed
+
+The agent was configured with the following tooling to support the full DevOps workflow:
+
+- **Docker Engine** (build + push)  
+- **AWS CLI v2** (ECR login and Terraform authentication)  
+- **Terraform** (IaC provisioning)  
+- **kubectl** (cluster interactions)  
+- **Helm** (EKS deployments with charts)  
+- **Cosign** (image signing and verification)  
+- **Trivy** (container vulnerability scanning)  
+- **Java 17 / Maven** (Spring Boot build workflow)  
+- **Git**  
+- **Azure DevOps Agent runtime**
+
+This ensures the pipeline can execute all stages without restrictions.
+
+---
+
+### 🔐 Security Considerations for the Self-Hosted Agent
+
+To maintain a secure and controlled supply chain:
+
+- The agent runs isolated in a **private network**  
+- Only outbound connections to Azure DevOps are allowed  
+- AWS credentials are injected at runtime via Azure Pipeline secure variables  
+- No long-lived credentials are stored on disk  
+- Docker is restricted to controlled build contexts  
+- The agent only receives IAM permissions required for:  
+  - ECR authentication  
+  - ECR image push  
+  - Terraform backend access  
+  - (Optional) EKS interactions  
+
+---
+
+### 🛠️ Pipeline Configuration
+
+The pipeline explicitly targets the self-hosted agent pool:
+
+```yaml
+pool:
+  name: 'sofia-self-hosted'
+
+
 ## Useful links
 
 * [Azure DevOps Pipelines Documentation](https://learn.microsoft.com/es-es/azure/devops/pipelines/?view=azure-devops)

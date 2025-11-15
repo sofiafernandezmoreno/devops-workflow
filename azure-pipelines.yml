@@ -67,7 +67,7 @@ stages:
       namespaceVar: '$(NAMESPACE_DEV)'
       clusterNameVar: '$(CLUSTER_NAME_DEV)'
       dependsOnStage: 'PushAndSign'
-      extraCondition: "not(in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI'))"
+      extraCondition: "or(startsWith(variables['Build.SourceBranch'], 'refs/pull/'), eq(variables['Build.SourceBranch'], 'refs/heads/main'))"
 
   # 4) Deploy STAGING
   - template: .azure-pipelines/stages-deploy.yml
@@ -79,7 +79,7 @@ stages:
       namespaceVar: '$(NAMESPACE_STAGING)'
       clusterNameVar: '$(CLUSTER_NAME_STAGING)'
       dependsOnStage: 'Deploy_Dev'
-      extraCondition: "and(eq(variables['Build.SourceBranch'], 'refs/heads/main'), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'))"
+      extraCondition: "and(eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))"
 
   # 5) Deploy PROD
   - template: .azure-pipelines/stages-deploy.yml
@@ -91,4 +91,4 @@ stages:
       namespaceVar: '$(NAMESPACE_PROD)'
       clusterNameVar: '$(CLUSTER_NAME_PROD)'
       dependsOnStage: 'Deploy_Staging'
-      extraCondition: "and(eq(variables['Build.SourceBranch'], 'refs/heads/main'), in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI', 'Manual'))"
+      extraCondition: "and(eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))"
