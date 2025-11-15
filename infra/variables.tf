@@ -21,3 +21,9 @@ variable "ecr_repo" {
   description = "Name of the ECR repository"
   default     = "nn-devops-challenge"
 }
+
+variable "admin_cidrs" {
+  type        = list(string)
+  description = "CIDRs allowed to access the EKS public endpoint"
+  default     = []
+}
