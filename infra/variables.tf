@@ -24,6 +24,6 @@ variable "ecr_repo" {
 
 variable "admin_cidrs" {
   type        = list(string)
-  description = "CIDRs allowed to access the EKS public endpoint"
-  default     = []
+  default     = ["0.0.0.0/0"]
+  description = "CIDRs allowed to access the EKS public endpoint."
 }

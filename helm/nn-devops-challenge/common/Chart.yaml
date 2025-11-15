@@ -1,5 +1,7 @@
 apiVersion: v2
+version: 1.0.0
 appVersion: 1.0.0
+name: common
 description: A Library Helm Chart for grouping common logic between all charts.
 keywords:
   - common
@@ -7,6 +9,4 @@ keywords:
 maintainers:
   - email: chui274@gmail.com
     name: Sofía Fernández Moreno
-name: common
 type: library
-version: 1.0.0

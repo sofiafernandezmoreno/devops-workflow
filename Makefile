@@ -1,7 +1,7 @@
 # Minimal Makefile for local/CI usage
 
 APP_NAME := nn-devops-challenge
-REGISTRY ?= localhost:5000
+REGISTRY ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 TAG      ?= local
 IMAGE    := $(REGISTRY)/$(APP_NAME):$(TAG)
 
