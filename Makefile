@@ -33,6 +33,16 @@ CYAN   := \033[1;36m
 RESET  := \033[0m
 
 # ---------------------------------------------------------
+# Phony targets
+# ---------------------------------------------------------
+.PHONY: help \
+        test \
+        build \
+        scan push sign verify \
+        tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate tf-docs \
+        deploy-dev deploy-staging deploy-prod
+
+# ---------------------------------------------------------
 # Help
 # ---------------------------------------------------------
 help: ## Show this help message
@@ -45,30 +55,7 @@ help: ## Show this help message
 	@echo ""
 
 # ---------------------------------------------------------
-# Java / Docker
-# ---------------------------------------------------------
-
-test: ## Run unit tests
-	cd $(APP_DIR) && mvn -q -DskipTests=false test
-
-build: ## Build Docker image
-	docker build -f $(APP_DIR)/Dockerfile -t $(IMAGE) $(APP_DIR)
-
-scan: ## Scan Docker image with Trivy (CRITICAL-only)
-	command -v trivy >/dev/null 2>&1 || (curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin)
-	trivy image --severity CRITICAL --exit-code 1 --no-progress $(IMAGE)
-
-push: ## Push image to registry
-	docker push $(IMAGE)
-
-sign: ## Sign image with Cosign
-	cosign sign --key ./cosign.key $(IMAGE)
-
-verify: ## Verify Cosign signature
-	cosign verify --key ./cosign.pub $(IMAGE)
-
-# ---------------------------------------------------------
-# Terraform
+# INFRA (Terraform)
 # ---------------------------------------------------------
 
 tf-init: ## Initialize Terraform
@@ -109,7 +96,38 @@ tf-docs: ## Generate Terraform documentation (terraform-docs)
 	done
 
 # ---------------------------------------------------------
-# Kubernetes deploy helpers
+# APP (Java / Spring Boot)
+# ---------------------------------------------------------
+
+test: ## Run unit tests
+	cd $(APP_DIR) && mvn -q -DskipTests=false test
+
+# ---------------------------------------------------------
+# DOCKER (Build)
+# ---------------------------------------------------------
+
+build: ## Build Docker image
+	docker build -f $(APP_DIR)/Dockerfile -t $(IMAGE) $(APP_DIR)
+
+# ---------------------------------------------------------
+# IMAGE REGISTRY & SECURITY (scan / push / sign / verify)
+# ---------------------------------------------------------
+
+scan: ## Scan Docker image with Trivy (CRITICAL-only)
+	command -v trivy >/dev/null 2>&1 || (curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin)
+	trivy image --severity CRITICAL --exit-code 1 --no-progress $(IMAGE)
+
+push: ## Push image to registry
+	docker push $(IMAGE)
+
+sign: ## Sign image with Cosign
+	cosign sign --key ./cosign.key $(IMAGE)
+
+verify: ## Verify Cosign signature
+	cosign verify --key ./cosign.pub $(IMAGE)
+
+# ---------------------------------------------------------
+# HELM / KUBERNETES DEPLOY
 # ---------------------------------------------------------
 
 deploy-dev: ## Deploy to dev namespace using Helm
