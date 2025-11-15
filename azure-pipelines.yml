@@ -8,8 +8,6 @@ variables:
   IMAGE_TAG: '$(Build.BuildNumber)'
   ECR_REPO: 'nn-devops-challenge'
 
-  AWS_REGION: '$(AWS_REGION)'
-  AWS_ACCOUNT_ID: '$(AWS_ACCOUNT_ID)'
   CONTAINER_REGISTRY: '$(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com'
   IMAGE_FULL: '$(CONTAINER_REGISTRY)/$(ECR_REPO):$(IMAGE_TAG)'
 
