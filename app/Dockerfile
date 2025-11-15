@@ -1,13 +1,34 @@
-FROM maven:3.9.6-eclipse-temurin-17 AS build
-WORKDIR /app
-COPY pom.xml .
-RUN mvn -q -DskipTests dependency:go-offline
-COPY src ./src
-RUN mvn -q -DskipTests package
+# ===== 1) Build stage =====
+FROM maven:3.9-eclipse-temurin-21-alpine AS build
 
-FROM eclipse-temurin:17-jre
+# Set working directory
 WORKDIR /app
-ENV JAVA_OPTS=""
+
+# Copy Maven wrapper and config first (leverages Docker cache)
+COPY pom.xml .
+COPY mvnw .
+COPY .mvn .mvn
+
+# Download dependencies
+RUN ./mvnw dependency:go-offline -B
+
+# Copy source code
+COPY src src
+
+# Build the application (skip tests for faster builds)
+RUN ./mvnw package -DskipTests -B
+
+
+# ===== 2) Runtime stage =====
+FROM eclipse-temurin:21-jre-alpine
+
+WORKDIR /app
+
+# Copy the built JAR from the "build" stage
 COPY --from=build /app/target/*.jar app.jar
+
+# Expose Spring Boot default port
 EXPOSE 8080
-ENTRYPOINT [ "sh", "-lc", "java $JAVA_OPTS -jar app.jar" ]
+
+# Run the application
+ENTRYPOINT ["java", "-jar", "/app/app.jar"]

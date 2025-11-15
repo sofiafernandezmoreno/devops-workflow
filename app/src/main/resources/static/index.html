@@ -940,79 +940,6 @@
                 </div>
             </div>
 
-            <!-- Right hero card -->
-            <aside class="hero-card">
-                <div class="hero-card-glow"></div>
-                <div class="hero-card-inner">
-                    <div class="hero-card-header">
-                        <span class="hero-card-title">Azure DevOps → AWS</span>
-                        <span class="hero-card-env-badge">dev / staging / prod</span>
-                    </div>
-
-                    <div class="hero-card-main">
-                        <div class="code-block">
-                            <div class="code-header">
-                                <div class="code-dots">
-                                    <span class="code-dot"></span>
-                                    <span class="code-dot"></span>
-                                    <span class="code-dot"></span>
-                                </div>
-                                <span>azure-pipelines.yml</span>
-                            </div>
-                            <div class="code-content">
-                                <span class="code-comment"># Build → Scan → Sign → Deploy</span>
-                                {"\n"}
-                                <span class="code-keyword">stages</span>:
-                                - stage: BuildTestScan
-                                jobs:
-                                - job: app
-                                steps:
-                                - script: mvn test
-                                - script: docker build{" "}
-                                <span class="code-comment"># Spring Boot → image</span>
-                                - stage: PushAndSign
-                                jobs:
-                                - script: trivy image <span class="code-value">$(IMAGE)</span>
-                                - script: cosign sign <span class="code-value">$(IMAGE)</span>
-                                - stage: Deploy_Dev
-                                <span class="code-comment"># kubectl + Helm into dev ns</span>
-                            </div>
-                        </div>
-
-                        <div class="cluster-card">
-                            <div class="cluster-envs">
-                                <div class="env-row">
-                                    <div class="env-name">
-                                        <span class="env-dot"></span>
-                                        <span>dev</span>
-                                    </div>
-                                    <span class="env-label">Preview / feature testing</span>
-                                </div>
-                                <div class="env-row">
-                                    <div class="env-name">
-                                        <span class="env-dot staging"></span>
-                                        <span>staging</span>
-                                    </div>
-                                    <span class="env-label">Pre-prod, manual approvals</span>
-                                </div>
-                                <div class="env-row">
-                                    <div class="env-name">
-                                        <span class="env-dot prod"></span>
-                                        <span>prod</span>
-                                    </div>
-                                    <span class="env-label">Signed + verified only</span>
-                                </div>
-                            </div>
-
-                            <div class="cluster-meta">
-                                <span>Cluster <strong>1×</strong></span>
-                                <span>Namespaces <strong>3×</strong></span>
-                                <span>Chart <strong>nn-devops-challenge</strong></span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-            </aside>
         </section>
 
         <!-- PIPELINE SECTION -->
@@ -1137,7 +1064,7 @@
             <div class="section-header">
                 <h2 class="section-title">Security & policy</h2>
                 <p class="section-subtitle">
-                    In this exercise the main focus is <strong>secure image signing with Cosign</strong>.  
+                    In this exercise the main focus is <strong>secure image signing with Cosign</strong>.
                     On top of that, the design is ready to plug in <strong>OPA policies</strong> (for example
                     in an admission controller or as a dedicated policy stage in the pipeline) to enforce
                     additional rules on what is allowed to run in the cluster.
@@ -1173,11 +1100,14 @@
                         Typical policies for this setup could be:
                     </p>
                     <ul class="section-subtitle" style="margin-left:16px; margin-bottom:6px;">
-                        <li>Only allow containers whose images are <strong>signed by the expected Cosign key</strong>.</li>
+                        <li>Only allow containers whose images are <strong>signed by the expected Cosign key</strong>.
+                        </li>
                         <li>Enforce <strong>allowed registries</strong> (e.g. only this AWS ECR account).</li>
-                        <li>Block deployments if the last security scan still has <strong>CRITICAL vulnerabilities</strong>.</li>
+                        <li>Block deployments if the last security scan still has <strong>CRITICAL
+                                vulnerabilities</strong>.</li>
                         <li>Restrict which teams can deploy into <strong>prod namespace</strong>.</li>
-                        <li>Ensure labels/annotations for <strong>traceability and auditability</strong> are present.</li>
+                        <li>Ensure labels/annotations for <strong>traceability and auditability</strong> are present.
+                        </li>
                     </ul>
                     <div class="tags-row">
                         <span class="tag">opa gate in pipeline</span>
@@ -1274,10 +1204,12 @@
                 <div>
                     <div class="modal-title" id="pipeline-modal-title">Azure DevOps pipeline</div>
                     <div class="modal-subtitle">
-                        Single pipeline implementing: build → scan (CRITICAL only) → sign → push → promote (dev → staging → prod) → Helm deploy to EKS.
+                        Single pipeline implementing: build → scan (CRITICAL only) → sign → push → promote (dev →
+                        staging → prod) → Helm deploy to EKS.
                     </div>
                 </div>
-                <button class="modal-close-btn" type="button" data-close-pipeline-modal="true" aria-label="Close pipeline modal">
+                <button class="modal-close-btn" type="button" data-close-pipeline-modal="true"
+                    aria-label="Close pipeline modal">
                     ×
                 </button>
             </div>
@@ -1286,125 +1218,267 @@
 trigger:
   - main
 
+pr:
+  - main
+
+schedules:
+  - cron: "0 2 * * *"
+    displayName: Nightly Renovate
+    branches:
+      include:
+        - main
+    always: true
+
 variables:
   IMAGE_NAME: 'nn-devops-challenge'
   IMAGE_TAG: '$(Build.BuildNumber)'
+  ECR_REPO: 'nn-devops-challenge'
   AWS_REGION: '$(AWS_REGION)'
   AWS_ACCOUNT_ID: '$(AWS_ACCOUNT_ID)'
-  ECR_REPO: 'nn-devops-challenge'
   CONTAINER_REGISTRY: '$(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com'
-  IMAGE: '$(CONTAINER_REGISTRY)/$(ECR_REPO):$(IMAGE_TAG)'
+  IMAGE_FULL: '$(CONTAINER_REGISTRY)/$(ECR_REPO):$(IMAGE_TAG)'
+  RUN_RENOVATE: 'false'
 
-stages:
-- stage: BuildTestScan
-  displayName: "Build, test & scan"
+# Stage 0 – Terraform (EKS + ECR + IAM)
+- stage: ProvisionInfra
+  displayName: "Provision AWS Infrastructure (EKS + ECR + IAM)"
+  condition: ne(variables['Build.Reason'], 'Schedule')
   jobs:
-  - job: build
-    pool: { vmImage: 'ubuntu-latest' }
-    steps:
-    - checkout: self
-    - script: make test
-      displayName: "Maven tests"
-    - script: docker build -t $(IMAGE) app
-      displayName: "Build Docker image"
-    - script: |
-        if ! command -v trivy >/dev/null 2>&1; then
-          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
-            | sh -s -- -b /usr/local/bin
-        fi
-        trivy image --severity CRITICAL --exit-code 1 --no-progress $(IMAGE)
-      displayName: "Trivy scan (CRITICAL only)"
+    - job: terraform_apply
+      pool:
+        vmImage: 'ubuntu-latest'
+      steps:
+        - checkout: self
 
+        - task: TerraformInstaller@1
+          inputs:
+            terraformVersion: '1.13.5'
+
+        - script: |
+            set -euo pipefail
+            cd infra
+            terraform init
+            terraform plan -var-file="envs/dev/terraform.tfvars" -out=tfplan
+            terraform show -no-color tfplan
+            terraform apply tfplan
+          displayName: "Terraform plan + apply (dev only)"
+          env:
+            AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+            AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+            AWS_REGION: $(AWS_REGION)
+
+        - script: |
+            cd infra
+            terraform output -json > tf_outputs.json
+            echo "##vso[task.setvariable variable=ECR_REPO_URL;isOutput=true]$(jq -r .ecr_repository_url.value tf_outputs.json)"
+            echo "##vso[task.setvariable variable=EKS_CLUSTER_NAME_DEV;isOutput=true]$(jq -r .eks_cluster_name.value tf_outputs.json)"
+          name: setTerraformOutputs
+          displayName: "Export Terraform outputs"
+
+# Stage 1 – Renovate
+- stage: Renovate
+  displayName: "Renovate dependencies"
+  condition: or(eq(variables['Build.Reason'], 'Schedule'), eq(variables['RUN_RENOVATE'], 'true'))
+  jobs:
+    - job: renovate
+      pool:
+        vmImage: 'ubuntu-latest'
+      steps:
+        - checkout: self
+        - bash: |
+            set -euo pipefail
+            docker run --rm \
+              -e RENOVATE_TOKEN=$(RENOVATE_TOKEN) \
+              -e RENOVATE_PLATFORM=azure \
+              -e RENOVATE_ENDPOINT=https://dev.azure.com \
+              -e LOG_LEVEL=info \
+              ghcr.io/renovatebot/renovate:latest \
+              "$(System.CollectionUri)$(System.TeamProject)/_git/$(Build.Repository.Name)"
+          displayName: "Run Renovate"
+          env:
+            RENOVATE_TOKEN: $(RENOVATE_TOKEN)
+
+# Stage 2 – Build, test & Trivy (CRITICAL only)
+- stage: BuildTestScan
+  displayName: "Build, test & security scan"
+  condition: ne(variables['Build.Reason'], 'Schedule')
+  jobs:
+    - job: build_test_scan
+      pool:
+        vmImage: 'ubuntu-latest'
+      steps:
+        - checkout: self
+        - bash: |
+            set -euo pipefail
+            make test
+          displayName: "Maven tests"
+        - bash: |
+            set -euo pipefail
+            docker build -f app/Dockerfile -t "$(IMAGE_FULL)" app
+          displayName: "Build Docker image"
+        - bash: |
+            set -euo pipefail
+            if ! command -v trivy >/dev/null 2>&1; then
+              curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+                | sh -s -- -b /usr/local/bin
+            fi
+            trivy image --severity CRITICAL --exit-code 1 --no-progress "$(IMAGE_FULL)"
+          displayName: "Trivy scan (CRITICAL only)"
+        - publish: $(Build.SourcesDirectory)
+          artifact: src
+
+# Stage 3 – Push to ECR & Cosign
 - stage: PushAndSign
   displayName: "Push to ECR & Cosign"
   dependsOn: BuildTestScan
+  condition: succeeded()
   jobs:
-  - job: push_sign
-    pool: { vmImage: 'ubuntu-latest' }
-    steps:
-    - script: |
-        aws ecr describe-repositories --repository-names $(ECR_REPO) --region $(AWS_REGION) 2>/dev/null \
-          || aws ecr create-repository --repository-name $(ECR_REPO) --region $(AWS_REGION)
-        aws ecr get-login-password --region $(AWS_REGION) \
-          | docker login --username AWS --password-stdin $(CONTAINER_REGISTRY)
-        docker push $(IMAGE)
-      env:
-        AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
-        AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
-      displayName: "Push image to ECR"
-    - script: |
-        curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 \
-          -o cosign && chmod +x cosign && sudo mv cosign /usr/local/bin/
-        echo "$(COSIGN_PRIVATE_KEY_B64)" | base64 -d > cosign.key
-        COSIGN_PASSWORD="$(COSIGN_PASSWORD)" cosign sign --key cosign.key $(IMAGE)
-      displayName: "Cosign sign image"
-    - script: |
-        curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 \
-          -o cosign && chmod +x cosign && sudo mv cosign /usr/local/bin/
-        echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
-        cosign verify --key cosign.pub $(IMAGE)
-      displayName: "Cosign verify (gate)"
+    - job: push_sign
+      pool:
+        vmImage: 'ubuntu-latest'
+      steps:
+        - download: current
+          artifact: src
+        - bash: |
+            set -euo pipefail
+            aws ecr describe-repositories --repository-names "$(ECR_REPO)" --region "$(AWS_REGION)" >/dev/null 2>&1 \
+              || aws ecr create-repository --repository-name "$(ECR_REPO)" --region "$(AWS_REGION)" >/dev/null
+            aws ecr get-login-password --region "$(AWS_REGION)" \
+              | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
+            docker images | grep -q "$(IMAGE_FULL)" || docker build -f app/Dockerfile -t "$(IMAGE_FULL)" app
+            docker push "$(IMAGE_FULL)"
+            echo "$(IMAGE_FULL)" > image.txt
+          displayName: "Push image to ECR"
+          env:
+            AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+            AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+            AWS_REGION: $(AWS_REGION)
+        - bash: |
+            set -euo pipefail
+            curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 \
+              -o cosign && chmod +x cosign && sudo mv cosign /usr/local/bin/
+            echo "$(COSIGN_PRIVATE_KEY_B64)" | base64 -d > cosign.key
+            echo "$(COSIGN_PUBLIC_KEY_B64)"  | base64 -d > cosign.pub
+            COSIGN_PASSWORD="${COSIGN_PASSWORD:-}" cosign sign --key cosign.key "$(IMAGE_FULL)"
+          displayName: "Cosign sign image"
+        - bash: |
+            set -euo pipefail
+            curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 \
+              -o cosign && chmod +x cosign && sudo mv cosign /usr/local/bin/
+            echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
+            cosign verify --key cosign.pub "$(IMAGE_FULL)"
+          displayName: "Cosign verify (gate)"
+        - task: PublishBuildArtifacts@1
+          inputs:
+            pathToPublish: image.txt
+            artifactName: image-ref
 
-# Environments have approvals configured in Azure DevOps:
-#   dev -> staging -> prod (same cluster, different namespaces)
-
+# Stage 4 – Deploy to dev (namespace dev)
 - stage: Deploy_Dev
   displayName: "Deploy to dev"
   dependsOn: PushAndSign
+  condition: succeeded()
   jobs:
-  - deployment: deploy_dev
-    environment: "dev"
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - script: |
-              aws eks update-kubeconfig --region $(AWS_REGION) --name $(CLUSTER_NAME_DEV)
-              helm upgrade --install nn-devops-challenge-dev ./helm/nn-devops-challenge/app \
-                --namespace dev \
-                --set image.repository=$(CONTAINER_REGISTRY)/$(ECR_REPO) \
-                --set image.tag=$(IMAGE_TAG)
-            env:
-              AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
-              AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+    - deployment: deploy_dev
+      environment: "dev"
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - download: current
+                artifact: image-ref
+              - bash: echo "IMAGE=$(cat $(Pipeline.Workspace)/image-ref/image.txt)" >> $(Pipeline.Workspace)/image.env
+              - bash: |
+                  set -euo pipefail
+                  source $(Pipeline.Workspace)/image.env
+                  curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 \
+                    -o cosign && chmod +x cosign && sudo mv cosign /usr/local/bin/
+                  echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
+                  cosign verify --key cosign.pub "${IMAGE}"
+                displayName: "Verify signature (dev gate)"
+              - bash: |
+                  set -euo pipefail
+                  source $(Pipeline.Workspace)/image.env
+                  aws eks update-kubeconfig --region "$(AWS_REGION)" --name "$(CLUSTER_NAME_DEV)"
+                  command -v helm >/dev/null || (curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash)
+                  ./scripts/deploy.sh dev "${IMAGE}" ./helm/nn-devops-challenge
+                displayName: "Helm deploy to dev"
+                env:
+                  AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+                  AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+                  AWS_REGION: $(AWS_REGION)
 
+# Stage 5 – Deploy to staging (namespace staging)
 - stage: Deploy_Staging
   displayName: "Deploy to staging"
   dependsOn: Deploy_Dev
+  condition: succeeded()
   jobs:
-  - deployment: deploy_staging
-    environment: "staging"
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - script: |
-              aws eks update-kubeconfig --region $(AWS_REGION) --name $(CLUSTER_NAME_STAGING)
-              cosign verify --key cosign.pub $(IMAGE)
-              helm upgrade --install nn-devops-challenge-staging ./helm/nn-devops-challenge/app \
-                --namespace staging \
-                --set image.repository=$(CONTAINER_REGISTRY)/$(ECR_REPO) \
-                --set image.tag=$(IMAGE_TAG)
+    - deployment: deploy_staging
+      environment: "staging"
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - download: current
+                artifact: image-ref
+              - bash: echo "IMAGE=$(cat $(Pipeline.Workspace)/image-ref/image.txt)" >> $(Pipeline.Workspace)/image.env
+              - bash: |
+                  set -euo pipefail
+                  source $(Pipeline.Workspace)/image.env
+                  curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 \
+                    -o cosign && chmod +x cosign && sudo mv cosign /usr/local/bin/
+                  echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
+                  cosign verify --key cosign.pub "${IMAGE}"
+                displayName: "Verify signature (staging gate)"
+              - bash: |
+                  set -euo pipefail
+                  source $(Pipeline.Workspace)/image.env
+                  aws eks update-kubeconfig --region "$(AWS_REGION)" --name "$(CLUSTER_NAME_DEV)"
+                  command -v helm >/dev/null || (curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash)
+                  ./scripts/deploy.sh staging "${IMAGE}" ./helm/nn-devops-challenge
+                displayName: "Helm deploy to staging"
+                env:
+                  AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+                  AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+                  AWS_REGION: $(AWS_REGION)
 
+# Stage 6 – Deploy to prod (namespace prod)
 - stage: Deploy_Prod
   displayName: "Deploy to prod"
   dependsOn: Deploy_Staging
+  condition: succeeded()
   jobs:
-  - deployment: deploy_prod
-    environment: "prod"
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - script: |
-              aws eks update-kubeconfig --region $(AWS_REGION) --name $(CLUSTER_NAME_PROD)
-              cosign verify --key cosign.pub $(IMAGE)
-              # (Optional) OPA gate could be added here before applying manifests
-              helm upgrade --install nn-devops-challenge-prod ./helm/nn-devops-challenge/app \
-                --namespace prod \
-                --set image.repository=$(CONTAINER_REGISTRY)/$(ECR_REPO) \
-                --set image.tag=$(IMAGE_TAG)
-                </pre>
+    - deployment: deploy_prod
+      environment: "prod"
+      strategy:
+        runOnce:
+          deploy:
+            steps:
+              - download: current
+                artifact: image-ref
+              - bash: echo "IMAGE=$(cat $(Pipeline.Workspace)/image-ref/image.txt)" >> $(Pipeline.Workspace)/image.env
+              - bash: |
+                  set -euo pipefail
+                  source $(Pipeline.Workspace)/image.env
+                  curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 \
+                    -o cosign && chmod +x cosign && sudo mv cosign /usr/local/bin/
+                  echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
+                  cosign verify --key cosign.pub "${IMAGE}"
+                displayName: "Verify signature (prod gate)"
+              - bash: |
+                  set -euo pipefail
+                  source $(Pipeline.Workspace)/image.env
+                  aws eks update-kubeconfig --region "$(AWS_REGION)" --name "$(CLUSTER_NAME_DEV)"
+                  command -v helm >/dev/null || (curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash)
+                  ./scripts/deploy.sh prod "${IMAGE}" ./helm/nn-devops-challenge
+                displayName: "Helm deploy to prod"
+                env:
+                  AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+                  AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+                  AWS_REGION: $(AWS_REGION)
+</pre>
+
             </div>
             <div class="modal-footer">
                 <span># single pipeline · image re-used across dev → staging → prod</span>
