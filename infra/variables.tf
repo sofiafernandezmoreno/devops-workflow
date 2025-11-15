@@ -27,3 +27,8 @@ variable "admin_cidrs" {
   default     = ["0.0.0.0/0"]
   description = "CIDRs allowed to access the EKS public endpoint."
 }
+
+variable "admin_user_arn" {
+  type        = string
+  description = "IAM ARN con acceso admin al cluster EKS"
+}

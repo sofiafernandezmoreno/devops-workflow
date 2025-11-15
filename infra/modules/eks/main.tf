@@ -32,15 +32,7 @@ module "eks" {
       instance_types = ["t3.small"]
     }
   }
-  manage_aws_auth_configmap = true
 
-  aws_auth_users = [
-    {
-      userarn  = var.admin_user_arn
-      username = "cluster-admin"
-      groups   = ["system:masters"]
-    }
-  ]
   tags = {
     Project = var.project
   }

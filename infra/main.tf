@@ -12,12 +12,13 @@ module "network" {
 # MODULE: EKS
 # -------------------------
 module "eks" {
-  source      = "./modules/eks"
-  project     = var.project
-  aws_region  = var.aws_region
-  vpc_id      = module.network.vpc_id
-  subnet_ids  = module.network.subnet_ids
-  admin_cidrs = var.admin_cidrs
+  source         = "./modules/eks"
+  project        = var.project
+  aws_region     = var.aws_region
+  vpc_id         = module.network.vpc_id
+  subnet_ids     = module.network.subnet_ids
+  admin_cidrs    = var.admin_cidrs
+  admin_user_arn = var.admin_user_arn
 }
 
 # -------------------------
