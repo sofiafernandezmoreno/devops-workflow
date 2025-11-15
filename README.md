@@ -10,7 +10,8 @@ This repository implements a full DevOps workflow designed for the NN DevOps Cha
 Although the challenge only requires deploying a sample application to EKS, this solution goes further by providing a multi-environment production-ready setup, including:
 
 * Infrastructure as Code (Terraform)
-* Three isolated environments (dev, staging, prod) (only dev is used for the challenge exercise)
+* Three isolated clusters (dev, staging, prod) (only dev is used for the challenge exercise)
+* Used DEV clusters to promotes through dev --> staging --> prod using namespaces
 * Automated Docker build workflow for a SpringBoot app generated with https://start.spring.io/
 * Security scanning with Trivy
 * Image signing & verification using Cosign
