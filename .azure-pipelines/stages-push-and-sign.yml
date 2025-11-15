@@ -8,7 +8,7 @@ stages:
   jobs:
   - job: push_sign
     pool:
-      vmImage: 'ubuntu-latest'
+      name: 'sofia-self-hosted'
     steps:
     - download: current
       artifact: src
