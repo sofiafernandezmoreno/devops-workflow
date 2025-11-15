@@ -234,3 +234,6 @@ cosign.pub*
 # k8s cert
 *ca.crt*
 *k8s-cert*
+
+
+*sofia-self-hosted-agent*
