@@ -1,6 +1,5 @@
 # ==============================================
 # NN DevOps Challenge – Azure DevOps Pipeline
-# Build → Scan → Sign → Push → Promote dev > staging > prod
 # ==============================================
 
 trigger:
