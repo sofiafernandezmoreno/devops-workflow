@@ -8,7 +8,7 @@ public class HomeController {
 
     @GetMapping("/home")
     public String home(){
-        return  "Hi Hello World";
+        return  "Hi team, this is test for 🚀 NN DevOps Challenge!";
     }
 
 }

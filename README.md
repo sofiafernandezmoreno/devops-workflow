@@ -11,7 +11,7 @@ Although the challenge only requires deploying a sample application to EKS, this
 
 * Infrastructure as Code (Terraform)
 * Three isolated environments (dev, staging, prod) (only dev is used for the challenge exercise)
-* Automated Docker build workflow
+* Automated Docker build workflow for a SpringBoot app generated with https://start.spring.io/
 * Security scanning with Trivy
 * Image signing & verification using Cosign
 * Push to ECR

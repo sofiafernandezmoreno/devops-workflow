@@ -102,6 +102,9 @@ tf-docs: ## Generate Terraform documentation (terraform-docs)
 test: ## Run unit tests
 	cd $(APP_DIR) && mvn -q -DskipTests=false test
 
+run: ## Run Spring Boot locally 
+	cd $(APP_DIR) && mvn spring-boot:run
+
 # ---------------------------------------------------------
 # DOCKER (Build)
 # ---------------------------------------------------------
