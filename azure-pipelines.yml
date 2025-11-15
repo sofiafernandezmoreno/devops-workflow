@@ -1,4 +1,9 @@
-trigger: none
+trigger:
+  branches:
+    include:
+      - '*'
+    exclude:
+      - main
 
 pr:
 - main
@@ -22,6 +27,9 @@ variables:
   RUN_RENOVATE: 'false'
 
 stages:
+  # ===========================
+  # STAGE 0 — RENOVATE
+  # ===========================
   - stage: Renovate
     displayName: Renovate Dependencies
     condition: or(eq(variables['Build.Reason'], 'Schedule'), eq(variables['RUN_RENOVATE'], 'true'))
@@ -43,13 +51,19 @@ stages:
         env:
           RENOVATE_TOKEN: $(RENOVATE_TOKEN)
 
-  # Build + Test + Trivy
+  # ===========================
+  # STAGE 1 — BUILD + TEST + TRIVY
+  # ===========================
   - template: .azure-pipelines/stages-build-test-scan.yml
 
-  # Push + Cosign
+  # ===========================
+  # STAGE 2 — PUSH TO ECR + COSIGN
+  # ===========================
   - template: .azure-pipelines/stages-push-and-sign.yml
 
-  # Deploy DEV
+  # ===========================
+  # STAGE 3 — DEPLOY DEV 
+  # ===========================
   - template: .azure-pipelines/stages-deploy.yml
     parameters:
       stageName: 'Deploy_Dev'
@@ -59,9 +73,11 @@ stages:
       namespaceVar: '$(NAMESPACE_DEV)'
       clusterNameVar: '$(CLUSTER_NAME_DEV)'
       dependsOnStage: 'PushAndSign'
-      extraCondition: "succeeded()"
+      extraCondition: "and(succeeded(), or(eq(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranch'], 'refs/heads/main')))"
 
-  # Deploy STAGING
+  # ===========================
+  # STAGE 4 — DEPLOY STAGING 
+  # ===========================
   - template: .azure-pipelines/stages-deploy.yml
     parameters:
       stageName: 'Deploy_Staging'
@@ -72,7 +88,10 @@ stages:
       clusterNameVar: '$(CLUSTER_NAME_STAGING)'
       dependsOnStage: 'Deploy_Dev'
       extraCondition: "and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))"
-  # Deploy PROD
+
+  # ===========================
+  # STAGE 5 — DEPLOY PROD
+  # ===========================
   - template: .azure-pipelines/stages-deploy.yml
     parameters:
       stageName: 'Deploy_Prod'

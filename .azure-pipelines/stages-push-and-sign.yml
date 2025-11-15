@@ -1,17 +1,26 @@
+# .azure-pipelines/stages-push-and-sign.yml
 parameters: {}
 
 stages:
 - stage: PushAndSign
   displayName: Push to ECR & Cosign
   dependsOn: BuildTestScan
-  condition: succeeded()
+  condition: and(
+    succeeded(),
+    or(
+      eq(variables['Build.Reason'], 'PullRequest'),
+      eq(variables['Build.SourceBranch'], 'refs/heads/main')
+    )
+  )
   jobs:
   - job: push_sign
+    displayName: Push image to ECR & Cosign
     pool:
       name: 'sofia-self-hosted'
     steps:
     - download: current
       artifact: src
+      displayName: Download source artifact
 
     - task: Bash@3
       displayName: Push image to ECR
@@ -24,8 +33,6 @@ stages:
         script: |
           set -euo pipefail
 
-          aws --version || (curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip && unzip -q awscliv2.zip && sudo ./aws/install)
-
           aws ecr describe-repositories \
             --repository-names "$(ECR_REPO)" \
             --region "$(AWS_REGION)" >/dev/null 2>&1 || \
@@ -33,13 +40,18 @@ stages:
             --repository-name "$(ECR_REPO)" \
             --region "$(AWS_REGION)" >/dev/null
 
+          # Login a ECR
           aws ecr get-login-password --region "$(AWS_REGION)" \
             | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
 
+          # Build (por si el agente cambió vs stage anterior)
           cd app
           docker build -t "$(IMAGE_FULL)" .
+
+          # Push
           docker push "$(IMAGE_FULL)"
 
+          # Guardar referencia de imagen
           mkdir -p $(Pipeline.Workspace)/image-ref
           echo "$(IMAGE_FULL)" > $(Pipeline.Workspace)/image-ref/image.txt
 
@@ -49,6 +61,8 @@ stages:
         targetType: inline
         script: |
           set -euo pipefail
+
+          # Cosign
           curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 -o cosign
           chmod +x cosign
           sudo mv cosign /usr/local/bin/
@@ -64,14 +78,17 @@ stages:
         targetType: inline
         script: |
           set -euo pipefail
+
           curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-linux-amd64 -o cosign
           chmod +x cosign
           sudo mv cosign /usr/local/bin/
 
           echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
+
           cosign verify --key cosign.pub "$(IMAGE_FULL)"
 
     - task: PublishBuildArtifacts@1
+      displayName: Publish image-ref artifact
       inputs:
         pathToPublish: $(Pipeline.Workspace)/image-ref
         artifactName: image-ref
