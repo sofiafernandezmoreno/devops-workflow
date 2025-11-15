@@ -34,18 +34,14 @@ stages:
             --repository-name "$(ECR_REPO)" \
             --region "$(AWS_REGION)" >/dev/null
 
-          # Login a ECR
           aws ecr get-login-password --region "$(AWS_REGION)" \
             | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
 
-          # Build (por si el agente cambió vs stage anterior)
           cd app
           docker build -t "$(IMAGE_FULL)" .
 
-          # Push
           docker push "$(IMAGE_FULL)"
 
-          # Guardar referencia de imagen
           mkdir -p $(Pipeline.Workspace)/image-ref
           echo "$(IMAGE_FULL)" > $(Pipeline.Workspace)/image-ref/image.txt
 
