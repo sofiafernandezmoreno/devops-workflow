@@ -9,19 +9,17 @@ No resources.
 
 | Name | Description | Type | Default | Required |
 |------|-------------|------|---------|:--------:|
-| aws\_region | AWS region | `string` | `"eu-west-1"` | no |
-| ecr\_repo | ECR repository name | `string` | `"springboot-app"` | no |
-| project | Project name prefix | `string` | `"nn-devops"` | no |
-| use\_default\_vpc | If true, reuse AWS default VPC (recommended for free-tier) | `bool` | `true` | no |
+| admin\_cidrs | CIDRs allowed to access the EKS public endpoint. | `list(string)` | <pre>[<br/>  "0.0.0.0/0"<br/>]</pre> | no |
+| aws\_region | AWS region for the deployment | `string` | `"eu-west-1"` | no |
+| ecr\_repo | Name of the ECR repository | `string` | `"nn-devops-challenge"` | no |
+| project | Project name for tagging and naming | `string` | `"nn-devops-challenge"` | no |
+| use\_default\_vpc | Use AWS default VPC instead of creating a new one | `bool` | `true` | no |
 ## Outputs
 
 | Name | Description |
 |------|-------------|
-| aws\_account\_id | n/a |
-| azdo\_access\_key\_id | n/a |
-| azdo\_secret\_access\_key | n/a |
-| ecr\_repository\_url | n/a |
-| eks\_cluster\_name | n/a |
-| subnet\_ids | n/a |
-| vpc\_id | n/a |
+| ecr\_repository\_url | URL of the ECR repository where images are pushed. |
+| eks\_cluster\_name | Name of the EKS cluster. |
+| subnet\_ids | Subnet IDs used by the EKS cluster. |
+| vpc\_id | VPC ID used by the EKS cluster. |
 <!-- END_TF_DOCS -->

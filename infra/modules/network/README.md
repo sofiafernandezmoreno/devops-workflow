@@ -10,7 +10,11 @@
 | [aws_vpc.default](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/vpc) | data source |
 ## Inputs
 
-No inputs.
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| aws\_region | n/a | `string` | n/a | yes |
+| project | n/a | `string` | n/a | yes |
+| use\_default\_vpc | n/a | `bool` | n/a | yes |
 ## Outputs
 
 | Name | Description |

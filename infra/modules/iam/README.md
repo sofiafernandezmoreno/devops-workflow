@@ -6,15 +6,15 @@
 
 | Name | Type |
 |------|------|
-| [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
+| [aws_iam_policy_document.eks_admin](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 ## Inputs
 
-No inputs.
+| Name | Description | Type | Default | Required |
+|------|-------------|------|---------|:--------:|
+| project | n/a | `string` | n/a | yes |
 ## Outputs
 
 | Name | Description |
 |------|-------------|
-| aws\_account\_id | n/a |
-| azdo\_access\_key\_id | n/a |
-| azdo\_secret\_access\_key | n/a |
+| eks\_admin\_role\_arn | n/a |
 <!-- END_TF_DOCS -->
