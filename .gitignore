@@ -230,3 +230,7 @@ override.tf.json
 cosign.key*
 cosign.pub*
 *cosign.cert*
+
+# k8s cert
+*ca.crt*
+*k8s-cert*
