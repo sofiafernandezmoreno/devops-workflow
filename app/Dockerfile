@@ -4,16 +4,12 @@ FROM maven:3.9-eclipse-temurin-21 AS build
 WORKDIR /app
 
 COPY pom.xml .
-COPY mvnw .
-COPY .mvn .mvn
 
-# Download dependencies to cache them
-RUN ./mvnw dependency:go-offline -B
+RUN mvn dependency:go-offline -B
 
-COPY src src
+COPY src ./src
 
-# Build the application
-RUN ./mvnw package -DskipTests -B
+RUN mvn package -DskipTests -B
 
 
 # ========= Runtime stage =========
@@ -25,6 +21,7 @@ WORKDIR /app
 
 COPY --from=build /app/target/*.jar app.jar
 
+# Run as non-root user
 USER spring
 
 EXPOSE 8080
