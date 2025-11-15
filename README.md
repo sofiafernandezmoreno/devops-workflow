@@ -6,17 +6,20 @@
 
 ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![Version: 1.0.0](https://img.shields.io/badge/Version-1.0.0-informational?style=flat-square)
 
-This repository provides a fully automated DevOps workflow:
+This repository implements a full DevOps workflow designed for the NN DevOps Challenge.
+Although the challenge only requires deploying a sample application to EKS, this solution goes further by providing a multi-environment production-ready setup, including:
 
-- **Infrastructure as Code** with Terraform  
-- **Azure DevOps Pipeline** with promotion: dev → staging → prod  
-- **Docker build** for a Spring Boot application  
-- **Security scanning** with Trivy  
-- **Image signing & verification** using Cosign  
-- **Push to AWS ECR**  
-- **Deployment to EKS using Helm & kubectl**  
-- **IAM least-privilege model**  
-- **Makefile automation**  
+* Infrastructure as Code (Terraform)
+* Three isolated environments (dev, staging, prod) (only dev is used for the challenge exercise)
+* Automated Docker build workflow
+* Security scanning with Trivy
+* Image signing & verification using Cosign
+* Push to ECR
+* Deployments to EKS via Helm
+* Azure DevOps multi-stage CI/CD pipeline
+* GitOps-friendly structure
+* Makefile automation for local workflows
+* IAM least privilege policy for Terraform service accounts
 
 ## 📁 Repository Structure
 
@@ -83,15 +86,15 @@ This repository provides a fully automated DevOps workflow:
 
 Terraform provisions:
 
-- **EKS Cluster**
-- **Node Group**
-- **OIDC Provider**
-- **ECR Repository**
-- **IAM roles for EKS, ECR & Azure DevOps**
-- **Optional VPC or default VPC**
-- **CloudWatch log groups**
-- **KMS key for encryption**
-- **S3/DynamoDB remote state**
+* EKS clusters (dev, staging, prod)
+* Managed node groups
+* OIDC Provider for IRSA
+* ECR repository
+* IAM roles for EKS, nodes, and the CI/CD pipeline
+* Optional default VPC usage
+* CloudWatch log groups
+* KMS Key for cluster encryption
+* S3 remote backend with DynamoDB locking
 
 ## 🗺️ Architecture Diagram (Infrastructure)
 
@@ -158,13 +161,14 @@ docker push $IMAGE
 ### **Stage 6 – Deployment to EKS (Helm)**
 
 ```
-helm upgrade --install nn-devops ./helm \
+helm upgrade --install app ./helm/nn-devops-challenge \
   --set image.repository=$IMAGE_REPO \
   --set image.tag=$TAG \
   --namespace nn-devops
+
 ```
 
-## 🛠️ Makefile Commands
+## 🛠️ Makefile Commands (Local Automation)
 
 ### Application tasks
 
@@ -180,71 +184,34 @@ make verify
 ### Terraform tasks
 
 ```
-make tf-init
-make tf-plan
-make tf-apply
-make tf-destroy
-make tf-output
-make tf-fmt
-make tf-validate
-```
+# Init
+make tf-init ENV=dev
 
-## 🌩️ How to Deploy Infrastructure (Local)
+# Plan
+make tf-plan ENV=dev
 
-### Init
+# Apply (dev cluster used for the challenge)
+make tf-apply ENV=dev
 
-```
-make tf-init
-```
-
-### Plan
+# Destroy (recommended for AWS Free Tier)
+make tf-destroy ENV=dev
 
 ```
-make tf-plan
-```
-
-### Apply
-
-```
-make tf-apply
-```
-
-### Destroy (Important for AWS Free Tier)
-
-```
-make tf-destroy
-```
-
-Terraform removes everything cleanly.
 
 ## 🧹 Cleanup Strategy (AWS Free Tier)
 
 To avoid being charged when testing:
 
-1. Remove EKS cluster  
-2. Remove node groups  
-3. Remove load balancers  
-4. Remove ECR images  
-5. Remove IAM roles  
-6. Remove VPC (if not default)  
-7. Remove S3 & DynamoDB backend manually (optional)  
+1. Destroy EKS cluster
+2. Destroy node groups
+3. Delete Load Balancers
+4. Delete ECR images
+5. Delete IAM roles
+6. Delete CloudWatch log groups
+7. (Optional) Clean S3 backend
 
 Just run:
 
 ```
-make tf-destroy
+make tf-destroy ENV=dev
 ```
-
-## 📌 Summary
-
-| Component | Status |
-|----------|--------|
-| Terraform Infra (EKS/ECR/IAM/VPC) | ✅ |
-| CI/CD with Azure DevOps | ✅ |
-| Docker Build | ✅ |
-| Trivy Scan | ✅ |
-| Cosign Signing + Verification | ✅ |
-| Deploy to EKS via Helm | ✅ |
-| Promotion with Approvals | ✅ |
-| Diagrams | ✅ |
-| Makefile Automation | ✅ |
