@@ -2,8 +2,7 @@
 # NN DevOps Challenge – Azure DevOps Pipeline
 # ==============================================
 
-trigger:
-- main
+trigger: none
 
 pr:
 - main
@@ -266,7 +265,7 @@ variables:
 - stage: Deploy_Staging
   displayName: Deploy to STAGING (namespace: nn-devops-staging)
   dependsOn: Deploy_Dev
-  condition: succeeded()
+  condition: and(succeded(), ne(variables['Build.Reason'], 'PullRequest'))
   jobs:
   - deployment: deploy_staging
     environment: 'STAGING'
@@ -324,7 +323,7 @@ variables:
 - stage: Deploy_Prod
   displayName: Deploy to PROD (namespace: nn-devops-prod)
   dependsOn: Deploy_Staging
-  condition: succeeded()
+  condition: and(succeded(), ne(variables['Build.Reason'], 'PullRequest'))
   jobs:
   - deployment: deploy_prod
     environment: 'PROD'
