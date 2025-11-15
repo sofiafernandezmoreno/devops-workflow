@@ -218,3 +218,7 @@ Just run:
 ```
 make tf-destroy ENV=dev
 ```
+
+## Useful links
+
+* [Azure DevOps Pipelines Documentation](https://learn.microsoft.com/es-es/azure/devops/pipelines/?view=azure-devops)
