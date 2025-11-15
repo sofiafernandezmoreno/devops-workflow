@@ -4,7 +4,14 @@ stages:
 - stage: PushAndSign
   displayName: Push to ECR & Cosign
   dependsOn: BuildTestScan
-  condition: and(succeeded(),not(in(variables['Build.Reason'], 'IndividualCI', 'BatchedCI')))
+  condition: >
+    and(
+      succeeded(),
+      or(
+        startsWith(variables['Build.SourceBranch'], 'refs/pull/'),
+        eq(variables['Build.SourceBranch'], 'refs/heads/main')
+      )
+    )
   jobs:
   - job: push_sign
     displayName: Push image to ECR & Cosign
