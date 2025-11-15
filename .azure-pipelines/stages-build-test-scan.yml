@@ -1,3 +1,4 @@
+# .azure-pipelines/stages-build-test-scan.yml
 parameters: {}
 
 stages:
@@ -6,6 +7,7 @@ stages:
   condition: ne(variables['Build.Reason'], 'Schedule')
   jobs:
   - job: build_test_scan
+    displayName: Build, Unit Tests & Trivy
     pool:
       name: 'sofia-self-hosted'
     steps:
@@ -36,7 +38,6 @@ stages:
         script: |
           set -euo pipefail
 
-          # Carpeta local para binarios de usuario
           mkdir -p "$HOME/.local/bin"
           export PATH="$HOME/.local/bin:$PATH"
 
@@ -54,3 +55,4 @@ stages:
 
     - publish: $(Build.SourcesDirectory)
       artifact: src
+      displayName: Publish source as artifact

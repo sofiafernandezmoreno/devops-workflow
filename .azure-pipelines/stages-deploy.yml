@@ -2,8 +2,8 @@
 parameters:
   stageName: ''
   displayName: ''
-  envName: ''            # dev / staging / prod (para approvals)
-  environmentName: ''    # mismo nombre que envName
+  envName: ''            # dev / staging / prod
+  environmentName: ''    # Environment in Azure DevOps
   namespaceVar: ''       # p.ej. $(NAMESPACE_DEV)
   clusterNameVar: ''     # p.ej. $(CLUSTER_NAME_DEV)
   dependsOnStage: ''     # p.ej. PushAndSign / Deploy_Dev / Deploy_Staging
@@ -16,6 +16,9 @@ stages:
   condition: ${{ parameters.extraCondition }}
   jobs:
   - deployment: deploy_job
+    displayName: Deploy ${{ parameters.envName }}
+    pool:
+      name: 'sofia-self-hosted'
     environment: ${{ parameters.environmentName }}
     strategy:
       runOnce:
@@ -23,6 +26,7 @@ stages:
           steps:
           - download: current
             artifact: image-ref
+            displayName: Download image-ref artifact
 
           - bash: |
               set -euo pipefail
@@ -49,12 +53,10 @@ stages:
               CLUSTER_NAME=${{ parameters.clusterNameVar }}
               NAMESPACE=${{ parameters.namespaceVar }}
 
-              aws --version || (curl -sSL "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o awscliv2.zip && unzip -q awscliv2.zip && sudo ./aws/install)
-
+              # Kubeconfig
               aws eks update-kubeconfig --region "$(AWS_REGION)" --name "${CLUSTER_NAME}"
 
-              command -v helm >/dev/null || (curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash)
-
+              # Namespace
               kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || \
                 kubectl create namespace "${NAMESPACE}"
 
