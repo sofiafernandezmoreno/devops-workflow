@@ -1,34 +1,32 @@
-# ===== 1) Build stage =====
-FROM maven:3.9-eclipse-temurin-21-alpine AS build
+# ========= Build stage =========
+FROM maven:3.9-eclipse-temurin-21 AS build
 
-# Set working directory
 WORKDIR /app
 
-# Copy Maven wrapper and config first (leverages Docker cache)
 COPY pom.xml .
 COPY mvnw .
 COPY .mvn .mvn
 
-# Download dependencies
+# Download dependencies to cache them
 RUN ./mvnw dependency:go-offline -B
 
-# Copy source code
 COPY src src
 
-# Build the application (skip tests for faster builds)
+# Build the application
 RUN ./mvnw package -DskipTests -B
 
 
-# ===== 2) Runtime stage =====
+# ========= Runtime stage =========
 FROM eclipse-temurin:21-jre-alpine
+
+RUN addgroup -S spring && adduser -S spring -G spring
 
 WORKDIR /app
 
-# Copy the built JAR from the "build" stage
 COPY --from=build /app/target/*.jar app.jar
 
-# Expose Spring Boot default port
+USER spring
+
 EXPOSE 8080
 
-# Run the application
 ENTRYPOINT ["java", "-jar", "/app/app.jar"]
