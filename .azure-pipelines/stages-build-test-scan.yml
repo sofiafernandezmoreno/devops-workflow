@@ -1,0 +1,44 @@
+parameters: {}
+
+stages:
+- stage: BuildTestScan
+  displayName: Build, Test & Security Scan
+  condition: ne(variables['Build.Reason'], 'Schedule')
+  jobs:
+  - job: build_test_scan
+    pool:
+      vmImage: 'ubuntu-latest'
+    steps:
+    - checkout: self
+
+    - task: Bash@3
+      displayName: Unit tests (Maven)
+      inputs:
+        targetType: inline
+        script: |
+          set -euo pipefail
+          cd app
+          mvn -q -DskipTests=false test
+
+    - task: Bash@3
+      displayName: Build Docker image
+      inputs:
+        targetType: inline
+        script: |
+          set -euo pipefail
+          cd app
+          docker build -t "$(IMAGE_FULL)" .
+
+    - task: Bash@3
+      displayName: Trivy scan (fail on CRITICAL)
+      inputs:
+        targetType: inline
+        script: |
+          set -euo pipefail
+          if ! command -v trivy >/dev/null 2>&1; then
+            curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin
+          fi
+          trivy image --severity CRITICAL --exit-code 1 --no-progress "$(IMAGE_FULL)"
+
+    - publish: $(Build.SourcesDirectory)
+      artifact: src
