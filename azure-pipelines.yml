@@ -210,7 +210,7 @@ variables:
   condition: succeeded()
   jobs:
   - deployment: deploy_dev
-    environment: 'dev'   # Configurar approvals en Azure DevOps → Environments
+    environment: 'DEV'   # Configurar approvals en Azure DevOps → Environments
     strategy:
       runOnce:
         deploy:
@@ -269,7 +269,7 @@ variables:
   condition: succeeded()
   jobs:
   - deployment: deploy_staging
-    environment: 'staging'
+    environment: 'STAGING'
     strategy:
       runOnce:
         deploy:
@@ -327,7 +327,7 @@ variables:
   condition: succeeded()
   jobs:
   - deployment: deploy_prod
-    environment: 'prod'
+    environment: 'PROD'
     strategy:
       runOnce:
         deploy:
