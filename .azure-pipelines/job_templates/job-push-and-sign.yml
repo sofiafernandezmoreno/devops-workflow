@@ -100,6 +100,7 @@ jobs:
           --yes \
           --timeout 60s \
           "${IMAGE_DIGEST_REF}"
+        echo "Done signing image."
 
   # ----------------------------------------------------
   # 3) COSIGN VERIFY (GLOBAL GATE, BY DIGEST)
