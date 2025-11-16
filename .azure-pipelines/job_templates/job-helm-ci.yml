@@ -6,10 +6,6 @@ jobs:
     name: 'sofia-self-hosted'
 
   steps:
-    - download: current
-      artifact: image-ref
-      displayName: "Download image-ref artifact"
-
     - task: Bash@3
       displayName: "Install Helm 4"
       inputs:
@@ -35,13 +31,4 @@ jobs:
         script: |
           set -euo pipefail
 
-          IMAGE_REF="$(cat image-ref/image.txt)"
-          echo "IMAGE_REF=$IMAGE_REF"
-
-          IMAGE_REPOSITORY="${IMAGE_REF%:*}"
-          IMAGE_TAG="${IMAGE_REF##*:}"
-
-          echo "Using IMAGE_REPOSITORY=$IMAGE_REPOSITORY"
-          echo "Using IMAGE_TAG=$IMAGE_TAG"
-
-          IMAGE_REPOSITORY="$IMAGE_REPOSITORY" IMAGE_TAG="$IMAGE_TAG" make helm-ci-test
+          make helm-ci-test
