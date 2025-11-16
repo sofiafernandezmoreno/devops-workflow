@@ -6,6 +6,7 @@ jobs:
   displayName: Push image to ECR & Cosign
   pool:
     name: 'sofia-self-hosted'
+
   steps:
   - checkout: self
 
@@ -13,6 +14,9 @@ jobs:
     artifact: src
     displayName: Download source artifact
 
+  # ----------------------------------------------------
+  # PUSH TO ECR
+  # ----------------------------------------------------
   - task: Bash@3
     displayName: Push image to ECR
     env:
@@ -24,6 +28,7 @@ jobs:
       script: |
         set -euo pipefail
 
+        # Install AWS CLI if not present
         if ! command -v aws >/dev/null 2>&1; then
           echo "Installing AWS CLI..."
           curl -sSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
@@ -53,26 +58,42 @@ jobs:
         mkdir -p $(Pipeline.Workspace)/image-ref
         echo "$(IMAGE_FULL)" > $(Pipeline.Workspace)/image-ref/image.txt
 
-        echo "Logging out from ECR to remove stored credentials..."
+        echo "Logging out from ECR..."
         docker logout "$(CONTAINER_REGISTRY)" || true
 
+  # ----------------------------------------------------
+  # COSIGN SIGN
+  # ----------------------------------------------------
   - task: Bash@3
     displayName: Cosign sign image
+    env:
+      AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+      AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+      AWS_REGION: $(AWS_REGION)
     inputs:
       targetType: inline
       script: |
         set -euo pipefail
 
+        echo "Installing Cosign..."
         curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
         chmod +x cosign
         sudo mv cosign /usr/local/bin/
 
+        echo "Decoding Cosign keys..."
         echo "$(COSIGN_PRIVATE_KEY_B64)" | base64 -d > cosign.key
         echo "$(COSIGN_PUBLIC_KEY_B64)"  | base64 -d > cosign.pub
 
-        echo "🔏 Signing image with Cosign..."
+        echo "Logging into ECR again before signing..."
+        aws ecr get-login-password --region "$(AWS_REGION)" \
+          | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
+
+        echo "Signing image with Cosign..."
         COSIGN_PASSWORD="${COSIGN_PASSWORD:-}" cosign sign --key cosign.key "$(IMAGE_FULL)"
 
+  # ----------------------------------------------------
+  # COSIGN VERIFY
+  # ----------------------------------------------------
   - task: Bash@3
     displayName: Cosign verify (global gate)
     inputs:
@@ -80,15 +101,20 @@ jobs:
       script: |
         set -euo pipefail
 
+        echo "Installing Cosign..."
         curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
         chmod +x cosign
         sudo mv cosign /usr/local/bin/
 
+        echo "Decoding public key..."
         echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
 
         echo "Verifying image signature..."
         cosign verify --key cosign.pub "$(IMAGE_FULL)"
 
+  # ----------------------------------------------------
+  # PUBLISH IMAGE REFERENCE
+  # ----------------------------------------------------
   - task: PublishBuildArtifacts@1
     displayName: Publish image-ref artifact
     inputs:
