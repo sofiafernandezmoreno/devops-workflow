@@ -68,7 +68,8 @@ RESET  := \033[0m
         cosign-install cosign-check sign verify sign-digest verify-digest image-digest \
         tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate tf-docs \
         deploy-dev deploy-staging deploy-prod \
-        chartsnap-install chartsnap-snapshot chartsnap-snapshot-all chartsnap-update
+        chartsnap-install chartsnap-snapshot chartsnap-snapshot-all chartsnap-update\
+		helm-lint chartsnap-snapshot-all chartsnap-update helm-ci-test
 
 # ---------------------------------------------------------
 # Help
@@ -194,25 +195,54 @@ verify-digest: cosign-install cosign-check ## Verify by digest
 	cosign verify --key $(COSIGN_PUB) $(IMAGE_REF_BY_DIGEST)
 
 # ---------------------------------------------------------
-# HELM SNAPSHOTS
+# HELM LINT & SNAPSHOTS
 # ---------------------------------------------------------
+
+CHART_ENVS_DIR            ?= $(CHART_PATH)/envs
+CHART_SNAPSHOT_OUTPUT_DIR ?= $(CHART_PATH)/ci/snapshots
 
 chartsnap-install: ## Install chartsnap
 	@helm plugin list 2>/dev/null | grep -q chartsnap \
 		|| helm plugin install https://github.com/jlandowner/helm-chartsnap
 
-chartsnap-snapshot: chartsnap-install ## Snapshot default
-	@mkdir -p "$(CHART_SNAPSHOT_OUTPUT_DIR)"
-	helm chartsnap -c $(CHART_PATH) -o $(CHART_SNAPSHOT_OUTPUT_DIR)
+helm-lint: ## Lint Helm chart with all env values
+	@echo "==> helm lint (base chart)"
+	helm lint $(CHART_PATH)
 
-chartsnap-snapshot-all: chartsnap-install ## Snapshot all
-	@test -d "$(CHART_SNAPSHOT_VALUES_DIR)" || (echo "Values dir missing"; exit 1)
-	@mkdir -p "$(CHART_SNAPSHOT_OUTPUT_DIR)"
-	helm chartsnap -c $(CHART_PATH) -f $(CHART_SNAPSHOT_VALUES_DIR) -o $(CHART_SNAPSHOT_OUTPUT_DIR)
+	@echo "==> helm lint with env values from $(CHART_ENVS_DIR)"
+	@for values in $(CHART_ENVS_DIR)/values-*.yaml; do \
+		if [ -f $$values ]; then \
+			echo "  -> helm lint $(CHART_PATH) -f $$values"; \
+			helm lint $(CHART_PATH) -f $$values; \
+		fi; \
+	done
 
-chartsnap-update: chartsnap-install ## Update snapshots
+chartsnap-snapshot-all: chartsnap-install ## Snapshot all envs (dev/staging/prod)
+	@test -d "$(CHART_ENVS_DIR)" || (echo "Env values dir missing: $(CHART_ENVS_DIR)"; exit 1)
 	@mkdir -p "$(CHART_SNAPSHOT_OUTPUT_DIR)"
-	helm chartsnap -c $(CHART_PATH) -f $(CHART_SNAPSHOT_VALUES_DIR) -o $(CHART_SNAPSHOT_OUTPUT_DIR) -u
+	@echo "==> Generating snapshots from $(CHART_ENVS_DIR)/values-*.yaml into $(CHART_SNAPSHOT_OUTPUT_DIR)/__snapshots__"
+	@for values in $(CHART_ENVS_DIR)/values-*.yaml; do \
+		if [ -f $$values ]; then \
+			echo "  -> $$values"; \
+			helm chartsnap -c $(CHART_PATH) -f $$values -o $(CHART_SNAPSHOT_OUTPUT_DIR); \
+		fi; \
+	done
+
+chartsnap-update: chartsnap-install ## Update snapshots for all envs
+	@test -d "$(CHART_ENVS_DIR)" || (echo "Env values dir missing: $(CHART_ENVS_DIR)"; exit 1)
+	@mkdir -p "$(CHART_SNAPSHOT_OUTPUT_DIR)"
+	@echo "==> Updating snapshots in $(CHART_SNAPSHOT_OUTPUT_DIR)/__snapshots__"
+	@for values in $(CHART_ENVS_DIR)/values-*.yaml; do \
+		if [ -f $$values ]; then \
+			echo "  -> $$values (update)"; \
+			helm chartsnap -c $(CHART_PATH) -f $$values -o $(CHART_SNAPSHOT_OUTPUT_DIR) -u; \
+		fi; \
+	done
+
+helm-ci-test: helm-lint chartsnap-snapshot-all ## Helm lint + snapshot tests for dev/staging/prod
+	@echo "==> Helm CI tests completed (lint + snapshots for all envs)"
+
+
 
 # ---------------------------------------------------------
 # DEPLOYMENT
