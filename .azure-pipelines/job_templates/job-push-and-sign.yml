@@ -15,7 +15,7 @@ jobs:
     displayName: Download source artifact
 
   # ----------------------------------------------------
-  # PUSH TO ECR
+  # 1) PUSH TO ECR (TAG + DIGEST)
   # ----------------------------------------------------
   - task: Bash@3
     displayName: Push image to ECR
@@ -61,13 +61,17 @@ jobs:
         echo "$(IMAGE_FULL)" > $(Pipeline.Workspace)/image-ref/image-tag.txt
         echo "${IMAGE_DIGEST_REF}" > $(Pipeline.Workspace)/image-ref/image-digest.txt
 
-        echo "Docker login will be reused by Cosign steps."
+        echo "Leaving Docker login in place for Cosign steps."
 
   # ----------------------------------------------------
-  # COSIGN SIGN (BY DIGEST, KEY SIN PASSWORD)
+  # 2) COSIGN SIGN (BY DIGEST, KEY SIN PASSWORD)
   # ----------------------------------------------------
   - task: Bash@3
     displayName: Cosign sign image (by digest)
+    env:
+      AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+      AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+      AWS_REGION: $(AWS_REGION)
     inputs:
       targetType: inline
       script: |
@@ -85,6 +89,10 @@ jobs:
         IMAGE_DIGEST_REF="$(cat $(Pipeline.Workspace)/image-ref/image-digest.txt)"
         echo "Image digest to sign: ${IMAGE_DIGEST_REF}"
 
+        echo "Ensuring Docker login to ECR (for Cosign)..."
+        aws ecr get-login-password --region "$(AWS_REGION)" \
+          | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
+
         echo "Signing image with Cosign (by digest)..."
         ./cosign sign \
           --key cosign.key \
@@ -93,12 +101,15 @@ jobs:
           --timeout 60s \
           "${IMAGE_DIGEST_REF}"
 
-
   # ----------------------------------------------------
-  # COSIGN VERIFY (GLOBAL GATE, BY DIGEST)
+  # 3) COSIGN VERIFY (GLOBAL GATE, BY DIGEST)
   # ----------------------------------------------------
   - task: Bash@3
     displayName: Cosign verify (global gate, by digest)
+    env:
+      AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+      AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+      AWS_REGION: $(AWS_REGION)
     inputs:
       targetType: inline
       script: |
@@ -115,14 +126,21 @@ jobs:
         IMAGE_DIGEST_REF="$(cat $(Pipeline.Workspace)/image-ref/image-digest.txt)"
         echo "Image digest to verify: ${IMAGE_DIGEST_REF}"
 
+        echo "Ensuring Docker login to ECR (for Cosign verify)..."
+        aws ecr get-login-password --region "$(AWS_REGION)" \
+          | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
+
         echo "Verifying image signature with Cosign (by digest)..."
-        ./cosign verify --key cosign.pub "${IMAGE_DIGEST_REF}"
+        ./cosign verify \
+          --key cosign.pub \
+          --timeout 60s \
+          "${IMAGE_DIGEST_REF}"
 
         echo "Logging out from ECR at the end of pipeline..."
         docker logout "$(CONTAINER_REGISTRY)" || true
 
   # ----------------------------------------------------
-  # PUBLISH IMAGE REFERENCE ARTIFACTIMAGE_DIGEST_REF
+  # 4) PUBLISH IMAGE REFERENCE ARTIFACT
   # ----------------------------------------------------
   - task: PublishBuildArtifacts@1
     displayName: Publish image-ref artifact

@@ -19,11 +19,11 @@ APP_NAME  := nn-devops-challenge
 APP_DIR   := app
 
 # AWS / Registry
-AWS_REGION    ?= eu-west-1
+AWS_REGION     ?= eu-west-1
 AWS_ACCOUNT_ID ?=
-REGISTRY      ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
-TAG           ?= local
-IMAGE         := $(REGISTRY)/$(APP_NAME):$(TAG)
+REGISTRY       ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+TAG            ?= local
+IMAGE          := $(REGISTRY)/$(APP_NAME):$(TAG)
 
 # Terraform settings
 TERRAFORM_DIR ?= infra
@@ -38,13 +38,16 @@ DEPLOY_SCRIPT ?= scripts/deploy.sh
 
 # Helm chartsnap (snapshot testing)
 CHART_SNAPSHOT_VALUES_DIR  ?= $(CHART_PATH)/ci
-CHART_SNAPSHOT_OUTPUT_DIR  ?= $(CHART_PATH)/ci/snapshots
+CHART_SNAPSHOT_OUTPUT_DIR  ?= $(CHART_SNAPSHOT_VALUES_DIR)/snapshots
 
-# Cosign
-COSIGN_KEY ?= ./cosign.key
-COSIGN_PUB ?= ./cosign.pub
+# Cosign key file paths
+COSIGN_KEY ?= cosign.cert/cosign.key
+COSIGN_PUB ?= cosign.cert/cosign.pub
 
-# Signing by digest (recommended)
+# Base64 decode (use -d, works fine in macOS and Linux)
+BASE64_DECODE := base64 -d
+
+# Signing by digest
 IMAGE_DIGEST ?=
 IMAGE_REF_BY_DIGEST := $(REGISTRY)/$(APP_NAME)@$(IMAGE_DIGEST)
 
@@ -62,7 +65,7 @@ RESET  := \033[0m
         test run \
         build package \
         scan push login-ecr \
-        sign verify cosign-install sign-digest verify-digest \
+        cosign-install cosign-decode-keys sign verify sign-digest verify-digest image-digest \
         tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate tf-docs \
         deploy-dev deploy-staging deploy-prod \
         chartsnap-install chartsnap-snapshot chartsnap-snapshot-all chartsnap-update
@@ -78,7 +81,6 @@ help: ## Show this help message
 		| sort \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  $(CYAN)%-25s$(RESET) %s\n", $$1, $$2}'
 	@echo ""
-
 
 # ---------------------------------------------------------
 # INFRA (Terraform)
@@ -128,7 +130,7 @@ tf-docs: ## Generate Terraform documentation (terraform-docs)
 test: ## Run unit tests
 	cd $(APP_DIR) && mvn -q -DskipTests=false test
 
-run: ## Run Spring Boot locally 
+run: ## Run Spring Boot locally
 	cd $(APP_DIR) && mvn spring-boot:run
 
 # ---------------------------------------------------------
@@ -142,7 +144,7 @@ package: build scan ## Build and scan Docker image
 	@echo "Build + scan completed"
 
 # ---------------------------------------------------------
-# IMAGE REGISTRY & SECURITY (scan / push / sign / verify)
+# IMAGE REGISTRY & SECURITY
 # ---------------------------------------------------------
 
 login-ecr: ## Login to AWS ECR
@@ -150,12 +152,20 @@ login-ecr: ## Login to AWS ECR
 	aws ecr get-login-password --region $(AWS_REGION) \
 		| docker login --username AWS --password-stdin $(REGISTRY)
 
-scan: ## Scan Docker image with Trivy (CRITICAL-only)
+scan: ## Scan Docker image with Trivy
 	command -v trivy >/dev/null 2>&1 || (curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin)
 	trivy image --severity CRITICAL --exit-code 1 --no-progress $(IMAGE)
 
-push: login-ecr ## Push image to registry
+push: login-ecr ## Push image to ECR
 	docker push $(IMAGE)
+
+# ---------------------------------------------------------
+# COSIGN (local keys in cosign.cert/)
+# ---------------------------------------------------------
+
+# Paths to your local keys
+COSIGN_KEY := cosign.cert/cosign.key
+COSIGN_PUB := cosign.cert/cosign.pub
 
 cosign-install: ## Install cosign if missing
 	command -v cosign >/dev/null 2>&1 || ( \
@@ -176,55 +186,58 @@ image-digest: ## Get remote image digest after push
 		echo "👉 Use it like:"; \
 		echo "make sign-digest IMAGE_DIGEST=$$DIGEST"
 
-sign: cosign-install ## Sign image with Cosign (by tag)
+# No decoding needed anymore, just ensure files exist
+cosign-check: ## Ensure local cosign keys exist
+	@test -f "$(COSIGN_KEY)" || (echo "ERROR: Missing $(COSIGN_KEY)"; exit 1)
+	@test -f "$(COSIGN_PUB)" || (echo "ERROR: Missing $(COSIGN_PUB)"; exit 1)
+	@echo "Local cosign keys found."
+
+sign: cosign-install cosign-check ## Sign image by tag
 	cosign sign --key $(COSIGN_KEY) $(IMAGE)
 
-verify: cosign-install ## Verify Cosign signature (by tag)
+verify: cosign-install cosign-check ## Verify signature by tag
 	cosign verify --key $(COSIGN_PUB) $(IMAGE)
 
-sign-digest: cosign-install ## Sign image with Cosign (by digest, recommended) (IMAGE_DIGEST=sha256:...)
-	@test -n "$(IMAGE_DIGEST)" || (echo "IMAGE_DIGEST is required, e.g. make sign-digest IMAGE_DIGEST=sha256:..." && exit 1)
+sign-digest: cosign-install cosign-check ## Sign image by digest
+	@test -n "$(IMAGE_DIGEST)" || (echo "IMAGE_DIGEST missing"; exit 1)
 	cosign sign --key $(COSIGN_KEY) $(IMAGE_REF_BY_DIGEST)
 
-verify-digest: cosign-install ## Verify Cosign signature (by digest) (IMAGE_DIGEST=sha256:...)
-	@test -n "$(IMAGE_DIGEST)" || (echo "IMAGE_DIGEST is required, e.g. make verify-digest IMAGE_DIGEST=sha256:..." && exit 1)
+verify-digest: cosign-install cosign-check ## Verify signature by digest
+	@test -n "$(IMAGE_DIGEST)" || (echo "IMAGE_DIGEST missing"; exit 1)
 	cosign verify --key $(COSIGN_PUB) $(IMAGE_REF_BY_DIGEST)
 
+
 # ---------------------------------------------------------
-# HELM CHART SNAPSHOTS (helm-chartsnap)
+# HELM CHART SNAPSHOTS
 # ---------------------------------------------------------
 
-chartsnap-install: ## Install helm-chartsnap Helm plugin
+chartsnap-install: ## Install helm-chartsnap plugin
 	@helm plugin list 2>/dev/null | grep -q chartsnap \
-		&& echo "helm-chartsnap plugin already installed" \
-		|| (echo "Installing helm-chartsnap plugin..." && \
-			helm plugin install https://github.com/jlandowner/helm-chartsnap)
+		&& echo "chartsnap already installed" \
+		|| helm plugin install https://github.com/jlandowner/helm-chartsnap
 
-chartsnap-snapshot: chartsnap-install ## Generate snapshot for chart with default values (stored in ci/)
+chartsnap-snapshot: chartsnap-install ## Snapshot default values
 	@mkdir -p "$(CHART_SNAPSHOT_OUTPUT_DIR)"
-	@echo "Generating snapshot for chart: $(CHART_PATH) (default values) into $(CHART_SNAPSHOT_OUTPUT_DIR)"
 	helm chartsnap -c $(CHART_PATH) -o $(CHART_SNAPSHOT_OUTPUT_DIR)
 
-chartsnap-snapshot-all: chartsnap-install ## Generate snapshots for all test values in CHART_SNAPSHOT_VALUES_DIR (stored in ci/)
-	@test -d "$(CHART_SNAPSHOT_VALUES_DIR)" || (echo "Missing chartsnap values dir: $(CHART_SNAPSHOT_VALUES_DIR)" && exit 1)
+chartsnap-snapshot-all: chartsnap-install ## Snapshot all test values
+	@test -d "$(CHART_SNAPSHOT_VALUES_DIR)" || (echo "Missing values dir"; exit 1)
 	@mkdir -p "$(CHART_SNAPSHOT_OUTPUT_DIR)"
-	@echo "Generating snapshots for chart: $(CHART_PATH) using values in $(CHART_SNAPSHOT_VALUES_DIR) into $(CHART_SNAPSHOT_OUTPUT_DIR)"
 	helm chartsnap -c $(CHART_PATH) -f $(CHART_SNAPSHOT_VALUES_DIR) -o $(CHART_SNAPSHOT_OUTPUT_DIR)
 
-chartsnap-update: chartsnap-install ## Update existing snapshots in ci/
+chartsnap-update: chartsnap-install ## Update snapshots
 	@mkdir -p "$(CHART_SNAPSHOT_OUTPUT_DIR)"
-	@echo "Updating snapshots for chart: $(CHART_PATH) in $(CHART_SNAPSHOT_OUTPUT_DIR)"
 	helm chartsnap -c $(CHART_PATH) -f $(CHART_SNAPSHOT_VALUES_DIR) -o $(CHART_SNAPSHOT_OUTPUT_DIR) -u
 
 # ---------------------------------------------------------
-# HELM / KUBERNETES DEPLOY
+# HELM DEPLOYMENT
 # ---------------------------------------------------------
 
-deploy-dev: ## Deploy to dev namespace using Helm
+deploy-dev: ## Deploy to dev namespace
 	./$(DEPLOY_SCRIPT) dev "$(IMAGE)" "$(CHART_PATH)"
 
-deploy-staging: ## Deploy to staging namespace using Helm
+deploy-staging: ## Deploy to staging namespace
 	./$(DEPLOY_SCRIPT) staging "$(IMAGE)" "$(CHART_PATH)"
 
-deploy-prod: ## Deploy to prod namespace using Helm
+deploy-prod: ## Deploy to prod namespace
 	./$(DEPLOY_SCRIPT) prod "$(IMAGE)" "$(CHART_PATH)"
