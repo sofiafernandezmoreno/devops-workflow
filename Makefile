@@ -9,25 +9,35 @@
 APP_NAME  := nn-devops-challenge
 APP_DIR   := app
 
-REGISTRY  ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
-TAG       ?= local
-IMAGE     := $(REGISTRY)/$(APP_NAME):$(TAG)
+# AWS / Registry
+AWS_REGION    ?= eu-west-1
+AWS_ACCOUNT_ID ?=
+REGISTRY      ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
+TAG           ?= local
+IMAGE         := $(REGISTRY)/$(APP_NAME):$(TAG)
 
 # Terraform settings
 TERRAFORM_DIR ?= infra
 ENV           ?= dev
 AWS_PROFILE   ?= terraform-nn-devops
-AWS_REGION    ?= eu-west-1
 
 TF_VARS_FILE  := $(TERRAFORM_DIR)/envs/$(ENV)/terraform.tfvars
 
 # Helm / deploy
 CHART_PATH    ?= helm/
 DEPLOY_SCRIPT ?= scripts/deploy.sh
+
 # Helm chartsnap (snapshot testing)
 CHART_SNAPSHOT_VALUES_DIR  ?= $(CHART_PATH)/ci
 CHART_SNAPSHOT_OUTPUT_DIR  ?= $(CHART_PATH)/ci/snapshots
 
+# Cosign
+COSIGN_KEY ?= ./cosign.key
+COSIGN_PUB ?= ./cosign.pub
+
+# Signing by digest (recommended)
+IMAGE_DIGEST ?=
+IMAGE_REF_BY_DIGEST := $(REGISTRY)/$(APP_NAME)@$(IMAGE_DIGEST)
 
 # ---------------------------------------------------------
 # Colors for help output
@@ -40,12 +50,13 @@ RESET  := \033[0m
 # Phony targets
 # ---------------------------------------------------------
 .PHONY: help \
-        test \
-        build \
-        scan push sign verify \
+        test run \
+        build package \
+        scan push login-ecr \
+        sign verify cosign-install sign-digest verify-digest \
         tf-init tf-plan tf-apply tf-destroy tf-output tf-fmt tf-validate tf-docs \
         deploy-dev deploy-staging deploy-prod \
-		chartsnap-install chartsnap-snapshot chartsnap-snapshot-all chartsnap-update
+        chartsnap-install chartsnap-snapshot chartsnap-snapshot-all chartsnap-update
 
 # ---------------------------------------------------------
 # Help
@@ -117,22 +128,45 @@ run: ## Run Spring Boot locally
 build: ## Build Docker image
 	docker build -f $(APP_DIR)/Dockerfile -t $(IMAGE) $(APP_DIR)
 
+package: build scan ## Build and scan Docker image
+	@echo "Build + scan completed"
+
 # ---------------------------------------------------------
 # IMAGE REGISTRY & SECURITY (scan / push / sign / verify)
 # ---------------------------------------------------------
+
+login-ecr: ## Login to AWS ECR
+	@test -n "$(AWS_ACCOUNT_ID)" || (echo "AWS_ACCOUNT_ID is not set" && exit 1)
+	aws ecr get-login-password --region $(AWS_REGION) \
+		| docker login --username AWS --password-stdin $(REGISTRY)
 
 scan: ## Scan Docker image with Trivy (CRITICAL-only)
 	command -v trivy >/dev/null 2>&1 || (curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh | sh -s -- -b /usr/local/bin)
 	trivy image --severity CRITICAL --exit-code 1 --no-progress $(IMAGE)
 
-push: ## Push image to registry
+push: login-ecr ## Push image to registry
 	docker push $(IMAGE)
 
-sign: ## Sign image with Cosign
-	cosign sign --key ./cosign.key $(IMAGE)
+cosign-install: ## Install cosign if missing
+	command -v cosign >/dev/null 2>&1 || ( \
+		echo "Installing cosign..." && \
+		curl -sSfL https://github.com/sigstore/cosign/releases/latest/download/cosign-$(shell uname -s | tr '[:upper:]' '[:lower:]')-amd64 \
+			-o cosign && chmod +x cosign && sudo mv cosign /usr/local/bin/cosign \
+	)
 
-verify: ## Verify Cosign signature
-	cosign verify --key ./cosign.pub $(IMAGE)
+sign: cosign-install ## Sign image with Cosign (by tag)
+	cosign sign --key $(COSIGN_KEY) $(IMAGE)
+
+verify: cosign-install ## Verify Cosign signature (by tag)
+	cosign verify --key $(COSIGN_PUB) $(IMAGE)
+
+sign-digest: cosign-install ## Sign image with Cosign (by digest, recommended) (IMAGE_DIGEST=sha256:...)
+	@test -n "$(IMAGE_DIGEST)" || (echo "IMAGE_DIGEST is required, e.g. make sign-digest IMAGE_DIGEST=sha256:..." && exit 1)
+	cosign sign --key $(COSIGN_KEY) $(IMAGE_REF_BY_DIGEST)
+
+verify-digest: cosign-install ## Verify Cosign signature (by digest) (IMAGE_DIGEST=sha256:...)
+	@test -n "$(IMAGE_DIGEST)" || (echo "IMAGE_DIGEST is required, e.g. make verify-digest IMAGE_DIGEST=sha256:..." && exit 1)
+	cosign verify --key $(COSIGN_PUB) $(IMAGE_REF_BY_DIGEST)
 
 # ---------------------------------------------------------
 # HELM CHART SNAPSHOTS (helm-chartsnap)
@@ -160,7 +194,6 @@ chartsnap-update: chartsnap-install ## Update existing snapshots in ci/
 	@echo "Updating snapshots for chart: $(CHART_PATH) in $(CHART_SNAPSHOT_OUTPUT_DIR)"
 	helm chartsnap -c $(CHART_PATH) -f $(CHART_SNAPSHOT_VALUES_DIR) -o $(CHART_SNAPSHOT_OUTPUT_DIR) -u
 
-
 # ---------------------------------------------------------
 # HELM / KUBERNETES DEPLOY
 # ---------------------------------------------------------
@@ -173,5 +206,3 @@ deploy-staging: ## Deploy to staging namespace using Helm
 
 deploy-prod: ## Deploy to prod namespace using Helm
 	./$(DEPLOY_SCRIPT) prod "$(IMAGE)" "$(CHART_PATH)"
-
-

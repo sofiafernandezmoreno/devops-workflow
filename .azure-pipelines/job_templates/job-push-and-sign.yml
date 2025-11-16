@@ -85,8 +85,13 @@ jobs:
         IMAGE_DIGEST_REF="$(cat $(Pipeline.Workspace)/image-ref/image-digest.txt)"
         echo "Image digest to sign: ${IMAGE_DIGEST_REF}"
 
-        echo "Signing image with Cosign (by digest)..."
-        ./cosign sign --key cosign.key "${IMAGE_DIGEST_REF}"
+        echo "Signing image with Cosign (by digest, key without password)..."
+        ./cosign sign \
+          --key cosign.key \
+          --tlog-upload=false \
+          --yes \
+          "${IMAGE_DIGEST_REF}"
+
 
   # ----------------------------------------------------
   # COSIGN VERIFY (GLOBAL GATE, BY DIGEST)
