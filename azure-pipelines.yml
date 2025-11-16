@@ -41,7 +41,7 @@ stages:
   - template: .azure-pipelines/job-renovate.yml
 
 # 1) Build + Tests + Trivy
-  - template: .azure-pipelines/stages-build-test-scan.yml
+  - template: .azure-pipelines/job-build-test-scan.yml
 
 
 # 2) Push to ECR + Cosign
