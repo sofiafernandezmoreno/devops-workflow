@@ -32,10 +32,10 @@ spec:
     spec:
       containers:
       - name: app
-        image: "dummy/nn-devops-challenge:latest"
+        image: ":"
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
         env:
         - name: SPRING_PROFILES_ACTIVE
-          value: "dev"
+          value: "staging"
