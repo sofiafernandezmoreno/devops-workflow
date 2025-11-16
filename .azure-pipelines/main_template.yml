@@ -1,3 +1,16 @@
+parameters:
+  - name: envName # dev / staging / prod
+    type: string
+    default: ''
+  - name: environmentName # name of the Environment in Azure DevOps
+    type: string
+    default: ''
+  - name: namespaceVar # $(NAMESPACE_DEV) / ...
+    type: string
+    default: ''
+  - name: clusterNameVar # $(CLUSTER_NAME_DEV) / ...
+    type: string
+    default: ''
 stages:
   # # ===========================
   # # STAGE 0 — RENOVATE
