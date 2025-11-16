@@ -1,7 +1,7 @@
 trigger:
   branches:
     include:
-      - '*'          # CI en todas las ramas
+      - '*'
 
 pr:
 - main              # Validación de PRs hacia main
@@ -33,36 +33,18 @@ variables:
   RUN_RENOVATE: 'false'
 
 stages:
-# 0) Renovate (solo schedule o si pones RUN_RENOVATE=true)
+# 0) Renovate
 - stage: Renovate
   displayName: Renovate Dependencies
-  condition: >
-    or(
-      eq(variables['Build.Reason'], 'Schedule'),
-      eq(variables['RUN_RENOVATE'], 'true')
-    )
+  condition: or(eq(variables['Build.Reason'], 'Schedule'), eq(variables['RUN_RENOVATE'], 'true'))
   jobs:
-  - job: renovate
-    displayName: Run Renovate
-    pool:
-      name: 'sofia-self-hosted'
-    steps:
-    - template: .azure-pipelines/job-renovate.yml
+  - template: .azure-pipelines/job-renovate.yml
 
-# 1) Build + Tests + Trivy (siempre)
-- stage: BuildTestScan
-  displayName: Build, Test & Security Scan
-  jobs:
-  - job: build_test_scan
-    displayName: Build + Tests + Trivy
-    pool:
-      name: 'sofia-self-hosted'
-    steps:
-    - template: .azure-pipelines/job-build-test-scan.yml
+# 1) Build + Tests + Trivy
+  - template: .azure-pipelines/stages-build-test-scan.yml
+
 
 # 2) Push to ECR + Cosign
-#    - PR -> main
-#    - o builds en main
 - stage: PushAndSign
   displayName: Push to ECR & Cosign
   dependsOn: BuildTestScan
@@ -75,31 +57,20 @@ stages:
       )
     )
   jobs:
-  - job: push_sign
-    displayName: Push image to ECR & Cosign
-    pool:
-      name: 'sofia-self-hosted'
-    steps:
-    - template: .azure-pipelines/job-push-and-sign.yml
+  - template: .azure-pipelines/job-push-and-sign.yml
 
 # 3) Deploy DEV (PR -> main + main)
 - stage: Deploy_Dev
   displayName: 'Deploy to DEV (namespace: nn-devops-dev)'
   dependsOn: PushAndSign
-  condition: succeeded()    # siempre que haya ido bien PushAndSign
+  condition: succeeded()
   jobs:
-  - deployment: deploy_dev
-    displayName: Deploy to dev
-    environment: dev        # aquí configuras approvals en Environments
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - template: .azure-pipelines/job-deploy.yml
-            parameters:
-              envName: 'dev'
-              namespaceVar: '$(NAMESPACE_DEV)'
-              clusterNameVar: '$(CLUSTER_NAME_DEV)'
+  - template: .azure-pipelines/job-deploy.yml
+    parameters:
+      envName: 'dev'
+      environmentName: 'dev'
+      namespaceVar: '$(NAMESPACE_DEV)'
+      clusterNameVar: '$(CLUSTER_NAME_DEV)'
 
 # 4) Deploy STAGING (solo main, no PR)
 - stage: Deploy_Staging
@@ -112,18 +83,12 @@ stages:
       ne(variables['Build.Reason'], 'PullRequest')
     )
   jobs:
-  - deployment: deploy_staging
-    displayName: Deploy to staging
-    environment: staging
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - template: .azure-pipelines/job-deploy.yml
-            parameters:
-              envName: 'staging'
-              namespaceVar: '$(NAMESPACE_STAGING)'
-              clusterNameVar: '$(CLUSTER_NAME_STAGING)'
+  - template: .azure-pipelines/job-deploy.yml
+    parameters:
+      envName: 'staging'
+      environmentName: 'staging'
+      namespaceVar: '$(NAMESPACE_STAGING)'
+      clusterNameVar: '$(CLUSTER_NAME_STAGING)'
 
 # 5) Deploy PROD (igual que STAGING)
 - stage: Deploy_Prod
@@ -136,15 +101,9 @@ stages:
       ne(variables['Build.Reason'], 'PullRequest')
     )
   jobs:
-  - deployment: deploy_prod
-    displayName: Deploy to prod
-    environment: prod
-    strategy:
-      runOnce:
-        deploy:
-          steps:
-          - template: .azure-pipelines/job-deploy.yml
-            parameters:
-              envName: 'prod'
-              namespaceVar: '$(NAMESPACE_PROD)'
-              clusterNameVar: '$(CLUSTER_NAME_PROD)'
+  - template: .azure-pipelines/job-deploy.yml
+    parameters:
+      envName: 'prod'
+      environmentName: 'prod'
+      namespaceVar: '$(NAMESPACE_PROD)'
+      clusterNameVar: '$(CLUSTER_NAME_PROD)'
