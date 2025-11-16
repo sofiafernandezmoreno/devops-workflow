@@ -1,0 +1,34 @@
+# .azure-pipelines/job_templates/job-helm-ci.yml
+jobs:
+- job: helm_ci
+  displayName: "Helm lint & snapshot tests"
+  pool:
+    name: 'sofia-self-hosted'
+
+  steps:
+    - task: Bash@3
+      displayName: "Install Helm 4"
+      inputs:
+        targetType: inline
+        script: |
+          set -euo pipefail
+
+          if ! command -v helm >/dev/null 2>&1; then
+            echo "Installing Helm 4..."
+            HELM_VERSION="v4.0.0"
+            curl -sSL "https://get.helm.sh/helm-${HELM_VERSION}-linux-amd64.tar.gz" -o helm.tar.gz
+            tar -xzf helm.tar.gz
+            sudo mv linux-amd64/helm /usr/local/bin/helm
+            rm -rf linux-amd64 helm.tar.gz
+          fi
+
+          echo "Helm version:"
+          helm version    
+    - task: Bash@3
+      displayName: "Run Helm lint + chartsnap snapshots (all envs)"
+      inputs:
+        targetType: inline
+        script: |
+          set -euo pipefail
+
+          make helm-ci-test
