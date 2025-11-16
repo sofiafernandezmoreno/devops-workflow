@@ -18,14 +18,18 @@ jobs:
         cd app
         mvn -q -DskipTests=false test
 
-  - task: Bash@3
-    displayName: Build Docker image
+  - task: Docker@2
+    displayName: Build and push (linux/amd64)
     inputs:
-      targetType: inline
-      script: |
-        set -euo pipefail
-        cd app
-        docker build -t "$(IMAGE_FULL)" .
+      command: buildAndPush
+      repository: nn-devops-challenge
+      dockerfile: Dockerfile
+      containerRegistry: $(dockerServiceConnection)
+      buildContext: .
+      arguments: >
+        --platform linux/amd64
+      tags: |
+        $(Build.BuildNumber)
 
   - task: Bash@3
     displayName: Trivy scan (fail on CRITICAL)
