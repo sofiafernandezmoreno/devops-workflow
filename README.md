@@ -9,7 +9,19 @@
 [![Build Status](https://dev.azure.com/sofia-nn-challenge/nn-devops-challenge/_apis/build/status%2Fsofiafernandezmoreno.nn-devops-challenge?branchName=main)](https://dev.azure.com/sofia-nn-challenge/nn-devops-challenge/_build/latest?definitionId=1&branchName=main)
 
 This repository implements a full DevOps workflow designed for the NN DevOps Challenge.
-Although the challenge only requires deploying a sample application to EKS, this solution goes further by providing a multi-environment production-ready setup, including:
+# 🎯 Challenge Requirements (Mapping)
+
+| Requirement | Status | Explanation |
+|------------|--------|-------------|
+| Build Java Spring Boot Docker image | ✅ | Maven + Docker |
+| Fail pipeline on CRITICAL vulnerabilities | ✅ | Trivy integrated |
+| Push to AWS ECR | ✅ | Docker + AWS CLI |
+| Cosign image signing | ✅ | Private signing key |
+| Promote to dev → staging → prod | ✅ | Multi-stage pipeline with approvals |
+| Verify signed digests | ✅ | Cosign verify before deploy |
+| Deploy to EKS using kubectl/Helm | ✅ | Custom Helm chart |
+
+Although the challenge only requires deploying a simple Spring Boot application to EKS, this solution extends far beyond that by providing a **multi-environment, fully secure, auditable CI/CD system**.
 
 * Infrastructure as Code (Terraform)
 * Three isolated clusters (dev, staging, prod) (only dev is used for the challenge exercise)
@@ -24,67 +36,6 @@ Although the challenge only requires deploying a sample application to EKS, this
 * Makefile automation for local workflows
 * IAM least privilege policy for Terraform service accounts
 
-## 📁 Repository Structure
-
-```
-.
-├── aws
-│   └── policies
-│       └── iam.json
-├── azure-pipelines.yml
-├── Dockerfile
-├── helm
-│   └── nn-devops-challenge
-│       ├── Chart.yaml
-│       ├── templates
-│       │   ├── _helpers.tpl
-│       │   ├── deployment.yaml
-│       │   └── service.yaml
-│       └── values.yaml
-├── infra
-│   ├── backend.tf
-│   ├── main.tf
-│   ├── modules
-│   │   ├── ecr
-│   │   │   ├── main.tf
-│   │   │   ├── outputs.tf
-│   │   │   ├── README.md
-│   │   │   └── variables.tf
-│   │   ├── eks
-│   │   │   ├── main.tf
-│   │   │   ├── outputs.tf
-│   │   │   ├── README.md
-│   │   │   └── variables.tf
-│   │   ├── iam
-│   │   │   ├── main.tf
-│   │   │   ├── outputs.tf
-│   │   │   ├── README.md
-│   │   │   └── variables.tf
-│   │   └── network
-│   │       ├── main.tf
-│   │       ├── outputs.tf
-│   │       ├── README.md
-│   │       └── variables.tf
-│   ├── outputs.tf
-│   ├── README.md
-│   └── variables.tf
-├── Makefile
-├── pom.xml
-├── README.md
-├── renovate.json
-├── scripts
-│   └── deploy.sh
-└── src
-    └── main
-        ├── java
-        │   └── com
-        │       └── example
-        │           └── springbootapp
-        │               └── DemoApplication.java
-        └── resources
-            └── application.properties
-```
-
 ## 🏗️ Infrastructure Overview
 
 Terraform provisions:
@@ -95,8 +46,6 @@ Terraform provisions:
 * ECR private registry
 * IAM roles for EKS, nodes, and the CI/CD pipeline
 * Optional default VPC usage
-* CloudWatch log groups
-* KMS-encrypted cluster secrets & objects
 * S3 backend for Terraform state + DynamoDB lock
 
 ## 🗺️ Architecture Diagram (Infrastructure)
@@ -190,48 +139,49 @@ This solution integrates multiple layers of security:
 * DynamoDB table used for:
   * state locking
 
-## 🛠️ Makefile Commands (Local Automation)
+## 🛠️ Makefile Commands
 
 ```
-# App pipeline
-make build
-make test
-make scan
-make sign
-make push
-make verify
+Available commands:
 
-# IaC pipeline
-make tf-init ENV=dev
-make tf-plan ENV=dev
-make tf-apply ENV=dev
-make tf-destroy ENV=dev
-```
-This avoids long CLI commands and standardizes developer workflows.
-
-## 🧹 Cleanup Strategy (AWS Free Tier)
-
-To avoid being charged when testing:
-
-1. Destroy EKS cluster
-2. Destroy node groups
-3. Delete Load Balancers
-4. Delete ECR images
-5. Delete IAM roles
-6. Delete CloudWatch log groups
-7. (Optional) Clean S3 backend
-
-Just run:
-
-```
-make tf-destroy ENV=dev
+  build                     Build Docker image
+  chartsnap-install         Install chartsnap
+  chartsnap-snapshot-all    Snapshot all envs (dev/staging/prod)
+  chartsnap-update          Update snapshots for all envs (local only)
+  cosign-check              Ensure keys exist and password set
+  cosign-install            Install cosign
+  deploy-dev                Deploy to dev
+  deploy-prod               Deploy to prod
+  deploy-staging            Deploy to staging
+  helm-ci-test              Helm lint + snapshot tests for dev/staging/prod
+  helm-lint                 Lint Helm chart with all env values
+  help                      Show this help message
+  image-digest              Get digest from ECR
+  login-ecr                 Login to ECR
+  package                   Build + scan
+  print-cosign-env          Debug: print COSIGN_PASSWORD from make
+  push                      Push to ECR
+  run                       Run locally
+  scan                      Trivy scan
+  sign-digest               Sign by digest
+  sign                      Sign by tag
+  test                      Run unit tests
+  tf-apply                  Terraform apply
+  tf-destroy                Terraform destroy
+  tf-docs                   Generate Terraform docs
+  tf-fmt                    Format Terraform code
+  tf-init                   Initialize Terraform
+  tf-output                 Show Terraform outputs
+  tf-plan                   Terraform plan for environment (ENV=dev/staging/prod)
+  tf-validate               Validate Terraform code
+  verify-digest             Verify by digest
+  verify                    Verify tag
 ```
 
 ## Azure DevOps Self-Hosted Agent (Required Component)
 
 This project uses a **self-hosted Azure DevOps agent** to support all the tooling required for the CI/CD pipeline.  
 Microsoft-hosted agents do **not** allow privileged operations such as:
-
 - Docker build & push  
 - Cosign signing  
 - Terraform apply  
@@ -336,8 +286,25 @@ Although the original NN DevOps Challenge only requires deploying a sample appli
 
 In a real-world scenario, this significantly reduces toil for the DevOps team and helps keep the AWS, Kubernetes and Spring Boot stack secure over time.
 
+## 🧹 Cleanup Strategy (AWS Free Tier)
 
+To avoid being charged when testing:
+
+1. Destroy EKS cluster
+2. Destroy node groups
+3. Delete Load Balancers
+4. Delete ECR images
+5. Delete IAM roles
+6. Delete CloudWatch log groups
+7. (Optional) Clean S3 backend
+
+Just run:
+
+```
+make tf-destroy ENV=dev
+```
 
 ## Useful links
 
 * [Azure DevOps Pipelines Documentation](https://learn.microsoft.com/es-es/azure/devops/pipelines/?view=azure-devops)
+* [Renovate Bot](https://docs.renovatebot.com/)
