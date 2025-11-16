@@ -1,4 +1,4 @@
-# job-deploy.yml  (GENERIC VERSION)
+# .azure-pipelines/job_templates/job-deploy.yml
 
 parameters:
   envName: ""            # dev / staging / prod

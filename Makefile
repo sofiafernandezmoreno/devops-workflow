@@ -24,8 +24,6 @@ REGISTRY       ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 TAG            ?= local
 IMAGE          := $(REGISTRY)/$(APP_NAME):$(TAG)
 
-IMAGE_REPOSITORY ?= $(REGISTRY)/$(APP_NAME)
-IMAGE_TAG        ?= $(TAG)
 
 # Terraform settings
 TERRAFORM_DIR ?= infra
@@ -43,7 +41,7 @@ CHART_SNAPSHOT_VALUES_DIR  ?= $(CHART_PATH)/ci
 CHART_SNAPSHOT_OUTPUT_DIR ?= $(CHART_PATH)/ci/snapshots
 
 IMAGE_REPOSITORY ?= $(REGISTRY)/$(APP_NAME)
-IMAGE_TAG        ?= $(TAG)
+IMAGE_TAG        ?= snapshot
 
 # ---------------------------------------------------------
 # COSIGN (local keys)

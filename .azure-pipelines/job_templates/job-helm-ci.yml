@@ -33,27 +33,15 @@ jobs:
 
     - task: Bash@3
       displayName: "Run Helm CI tests (lint + snapshots)"
+      env:
+        AWS_ACCOUNT_ID: $(AWS_ACCOUNT_ID)
+        AWS_REGION: $(AWS_REGION)
+        APP_NAME: 'nn-devops-challenge'
       inputs:
         targetType: inline
         script: |
           set -euo pipefail
 
-          IMAGE_REF_FILE="$(Pipeline.Workspace)/image-ref/image.txt"
-          echo "Reading image ref from: $IMAGE_REF_FILE"
+          IMAGE_REPOSITORY="${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com/${APP_NAME}"
 
-          if [ ! -f "$IMAGE_REF_FILE" ]; then
-            echo "ERROR: $IMAGE_REF_FILE not found"
-            ls -R
-            exit 1
-          fi
-
-          IMAGE_REF="$(cat "$IMAGE_REF_FILE")"
-          echo "IMAGE_REF=$IMAGE_REF"
-
-          IMAGE_REPOSITORY="${IMAGE_REF%:*}"
-          IMAGE_TAG="${IMAGE_REF##*:}"
-
-          echo "Using IMAGE_REPOSITORY=$IMAGE_REPOSITORY"
-          echo "Using IMAGE_TAG=$IMAGE_TAG"
-
-          IMAGE_REPOSITORY="$IMAGE_REPOSITORY" IMAGE_TAG="$IMAGE_TAG" make helm-ci-test
+          IMAGE_REPOSITORY="$IMAGE_REPOSITORY" make helm-ci-test
