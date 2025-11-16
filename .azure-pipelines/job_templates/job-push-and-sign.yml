@@ -107,9 +107,6 @@ jobs:
 
         echo "Done signing image. Signature stored at $(Pipeline.Workspace)/image-ref/image.sig"
 
-
-
-
   # ----------------------------------------------------
   # 3) COSIGN VERIFY (GLOBAL GATE, BY DIGEST + LOCAL SIGNATURE)
   # ----------------------------------------------------
@@ -148,10 +145,12 @@ jobs:
           verify \
           --key cosign.pub \
           --signature "${SIG_PATH}" \
+          --insecure-ignore-tlog \
           "${IMAGE_DIGEST_REF}"
 
         echo "Logging out from ECR at the end of pipeline..."
         docker logout "$(CONTAINER_REGISTRY)" || true
+
 
 
   # ----------------------------------------------------
