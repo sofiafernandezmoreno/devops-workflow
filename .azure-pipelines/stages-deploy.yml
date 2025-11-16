@@ -1,3 +1,4 @@
+# .azure-pipelines/stages-deploy.yml
 parameters:
   stageName: ''
   displayName: ''
@@ -15,6 +16,7 @@ stages:
   condition: and(succeeded(), ${{ parameters.extraCondition }})
   jobs:
   - deployment: deploy_${{ parameters.envName }}
+    displayName: Deploy to ${{ parameters.envName }}
     environment: ${{ parameters.environmentName }}
     strategy:
       runOnce:
@@ -49,9 +51,17 @@ stages:
               CLUSTER_NAME="${{ parameters.clusterNameVar }}"
               NAMESPACE="${{ parameters.namespaceVar }}"
 
-              aws eks update-kubeconfig --region "$(AWS_REGION)" --name "${CLUSTER_NAME}"
+              if ! command -v aws >/dev/null 2>&1; then
+                echo "Installing AWS CLI..."
+                curl -sSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+                sudo installer -pkg AWSCLIV2.pkg -target /
+              fi
 
-              command -v helm >/dev/null || (curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash)
+              if ! command -v helm >/dev/null 2>&1; then
+                curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+              fi
+
+              aws eks update-kubeconfig --region "$(AWS_REGION)" --name "${CLUSTER_NAME}"
 
               kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || \
                 kubectl create namespace "${NAMESPACE}"

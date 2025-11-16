@@ -1,3 +1,4 @@
+# .azure-pipelines/stages-build-test-scan.yml
 stages:
 - stage: BuildTestScan
   displayName: Build, Test & Security Scan
@@ -39,15 +40,12 @@ stages:
           export PATH="$HOME/.local/bin:$PATH"
 
           if ! command -v trivy >/dev/null 2>&1; then
-            echo "Installing Trivy locally into \$HOME/.local/bin..."
+            echo "Installing Trivy locally..."
             curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
               | sh -s -- -b "$HOME/.local/bin"
           fi
 
-          echo "Trivy version:"
           trivy --version
-
-          echo "Running Trivy scan on image: $(IMAGE_FULL)"
           trivy image --severity CRITICAL --exit-code 1 --no-progress "$(IMAGE_FULL)"
 
     - publish: $(Build.SourcesDirectory)

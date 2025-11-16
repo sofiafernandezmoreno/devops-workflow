@@ -1,0 +1,31 @@
+# .azure-pipelines/stages-renovate.yml
+stages:
+- stage: Renovate
+  displayName: Renovate Dependencies
+  condition: or(eq(variables['Build.Reason'], 'Schedule'),eq(variables['RUN_RENOVATE'], 'true'))
+  jobs:
+  - job: renovate
+    displayName: Run Renovate (Azure DevOps + GitHub)
+    pool:
+      name: 'sofia-self-hosted'
+    steps:
+    - checkout: self
+
+    - task: Bash@3
+      displayName: Run Renovate
+      inputs:
+        targetType: inline
+        script: |
+          set -euo pipefail
+
+          echo "Running Renovate for repo: $(Build.Repository.Uri)"
+
+          docker run --rm \
+            -e RENOVATE_TOKEN=$(RENOVATE_TOKEN) \
+            -e RENOVATE_PLATFORM=azure \
+            -e RENOVATE_ENDPOINT=https://dev.azure.com \
+            -e LOG_LEVEL=info \
+            ghcr.io/renovatebot/renovate:latest \
+            "$(System.CollectionUri)$(System.TeamProject)/_git/$(Build.Repository.Name)"
+      env:
+        RENOVATE_TOKEN: $(RENOVATE_TOKEN)
