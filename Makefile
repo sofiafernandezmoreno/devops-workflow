@@ -235,7 +235,7 @@ chartsnap-snapshot-all: chartsnap-install ## Snapshot all envs (dev/staging/prod
 			echo "  -> $$values"; \
 			helm chartsnap -c $(CHART_PATH) -f $$values -o $(CHART_SNAPSHOT_OUTPUT_DIR) -- \
 			  --set image.repository=$(IMAGE_REPOSITORY) \
-			  --set image.tag=$(IMAGE_TAG); \
+			  --set image.tag=snapshot; \
 		fi; \
 	done
 
@@ -248,7 +248,7 @@ chartsnap-update: chartsnap-install ## Update snapshots for all envs (local only
 			echo "  -> $$values (update)"; \
 			helm chartsnap -c $(CHART_PATH) -f $$values -o $(CHART_SNAPSHOT_OUTPUT_DIR) -u -- \
 			  --set image.repository=$(IMAGE_REPOSITORY) \
-			  --set image.tag=$(IMAGE_TAG); \
+			  --set image.tag=snapshot; \
 		fi; \
 	done
 
