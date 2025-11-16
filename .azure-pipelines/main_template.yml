@@ -43,7 +43,7 @@ stages:
     #condition: and(succeeded(),eq(variables['Build.SourceBranch'], 'refs/heads/main'))
     condition: succeeded()
     jobs:
-      #- template: .azure-pipelines/job_templates/job-helm-ci.yml
+      - template: .azure-pipelines/job_templates/job-helm-ci.yml
       - template: job_templates/job-deploy.yml
         parameters:
           envName: 'dev'
