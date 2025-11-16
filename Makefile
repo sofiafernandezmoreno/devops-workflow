@@ -232,9 +232,12 @@ chartsnap-snapshot-all: chartsnap-install ## Snapshot all envs (dev/staging/prod
 	@for values in $(CHART_ENVS_DIR)/values-*.yaml; do \
 		if [ -f $$values ]; then \
 			echo "  -> $$values"; \
-			helm chartsnap -c $(CHART_PATH) -f $$values -o $(CHART_SNAPSHOT_OUTPUT_DIR); \
+			helm chartsnap -c $(CHART_PATH) -f $$values -o $(CHART_SNAPSHOT_OUTPUT_DIR) -- \
+			  --set image.repository=$(IMAGE_REPOSITORY) \
+			  --set image.tag=$(IMAGE_TAG); \
 		fi; \
 	done
+
 
 chartsnap-update: chartsnap-install ## Update snapshots for all envs
 	@test -d "$(CHART_ENVS_DIR)" || (echo "Env values dir missing: $(CHART_ENVS_DIR)"; exit 1)
@@ -243,9 +246,12 @@ chartsnap-update: chartsnap-install ## Update snapshots for all envs
 	@for values in $(CHART_ENVS_DIR)/values-*.yaml; do \
 		if [ -f $$values ]; then \
 			echo "  -> $$values (update)"; \
-			helm chartsnap -c $(CHART_PATH) -f $$values -o $(CHART_SNAPSHOT_OUTPUT_DIR) -u; \
+			helm chartsnap -c $(CHART_PATH) -f $$values -o $(CHART_SNAPSHOT_OUTPUT_DIR) -u -- \
+			  --set image.repository=$(IMAGE_REPOSITORY) \
+			  --set image.tag=$(IMAGE_TAG); \
 		fi; \
 	done
+
 
 helm-ci-test: helm-lint chartsnap-snapshot-all ## Helm lint + snapshot tests for dev/staging/prod
 	@echo "==> Helm CI tests completed (lint + snapshots for all envs)"
