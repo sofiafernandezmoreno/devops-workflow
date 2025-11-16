@@ -1,0 +1,86 @@
+parameters:
+  - name: envName # dev / staging / prod
+    type: string
+    default: ''
+  - name: environmentName # name of the Environment in Azure DevOps
+    type: string
+    default: ''
+  - name: namespaceVar # $(NAMESPACE_DEV) / ...
+    type: string
+    default: ''
+  - name: clusterNameVar # $(CLUSTER_NAME_DEV) / ...
+    type: string
+    default: ''
+stages:
+
+
+# --------------------------------------------------------
+# 1) Build + Test + Trivy (always)
+# --------------------------------------------------------
+  - stage: BuildTestScan
+    displayName: "Build + Tests + Trivy Scan"
+    condition: always()
+    jobs: 
+      - template: ./job_templates/job-build-test-scan.yml
+
+# --------------------------------------------------------
+# 2) Push to ECR + Cosign (always after BuildTestScan)
+# --------------------------------------------------------
+  - stage: PushAndSign
+    displayName: "Push to ECR & Cosign Sign"
+    condition: succeeded()
+    dependsOn: BuildTestScan
+    jobs:
+      - template: ./job_templates/job-push-and-sign.yml
+
+# --------------------------------------------------------
+# 3) Deploy DEV (always after PushAndSign)
+# --------------------------------------------------------
+  - stage: Deploy_Dev
+    displayName: 'Deploy to DEV'
+    dependsOn: PushAndSign
+    condition: succeeded()  
+    jobs:
+      - template: job_templates/job-deploy.yml
+        parameters:
+          envName: 'dev'
+          environmentName: 'dev'
+          namespaceVar: '$(NAMESPACE_DEV)'
+          clusterNameVar: '$(CLUSTER_NAME_DEV)'
+# --------------------------------------------------------
+# 4) Deploy STAGING (only on main)
+# --------------------------------------------------------
+  - stage: Deploy_Staging
+    displayName: 'Deploy to STAGING'
+    dependsOn: Deploy_Dev
+    condition: and(succeeded(),eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - template: job_templates/job-deploy.yml
+        parameters:
+          envName: 'staging'
+          environmentName: 'staging'
+          namespaceVar: '$(NAMESPACE_STAGING)'
+          clusterNameVar: '$(CLUSTER_NAME_STAGING)'
+
+# --------------------------------------------------------
+# 5) Deploy PROD (only on main)
+# --------------------------------------------------------
+  - stage: Deploy_Prod
+    displayName: 'Deploy to PROD'
+    dependsOn: Deploy_Staging
+    condition: and(succeeded(),eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - template: job_templates/job-deploy.yml
+        parameters:
+          envName: 'prod'
+          environmentName: 'prod'
+          namespaceVar: '$(NAMESPACE_PROD)'
+          clusterNameVar: '$(CLUSTER_NAME_PROD)'
+# --------------------------------------------------------
+# 6) Renovate (only schedule or RUN_RENOVATE = true)
+# --------------------------------------------------------
+  - stage: Renovate
+    displayName: Renovate Dependencies
+    condition: or(eq(variables['Build.Reason'], 'Schedule'),eq(variables['RUN_RENOVATE'], 'true')  )
+    jobs:
+      - template: job_templates/job-renovate.yml          
