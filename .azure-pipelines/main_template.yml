@@ -12,14 +12,7 @@ parameters:
     type: string
     default: ''
 stages:
-# --------------------------------------------------------
-# 0) Renovate (only schedule or RUN_RENOVATE = true)
-# --------------------------------------------------------
-  - stage: Renovate
-    displayName: Renovate Dependencies
-    condition: or(eq(variables['Build.Reason'], 'Schedule'),eq(variables['RUN_RENOVATE'], 'true')  )
-    jobs:
-      - template: job_templates/job-renovate.yml
+
 
 # --------------------------------------------------------
 # 1) Build + Test + Trivy (always)
@@ -83,3 +76,11 @@ stages:
           environmentName: 'prod'
           namespaceVar: '$(NAMESPACE_PROD)'
           clusterNameVar: '$(CLUSTER_NAME_PROD)'
+# --------------------------------------------------------
+# 6) Renovate (only schedule or RUN_RENOVATE = true)
+# --------------------------------------------------------
+  - stage: Renovate
+    displayName: Renovate Dependencies
+    condition: or(eq(variables['Build.Reason'], 'Schedule'),eq(variables['RUN_RENOVATE'], 'true')  )
+    jobs:
+      - template: job_templates/job-renovate.yml          
