@@ -40,8 +40,7 @@ stages:
   - stage: Deploy_Dev
     displayName: 'Deploy to DEV'
     dependsOn: PushAndSign
-    #condition: and(succeeded(),eq(variables['Build.SourceBranch'], 'refs/heads/main'))
-    condition: succeeded()
+    condition: and(succeeded(),eq(variables['Build.SourceBranch'], 'refs/heads/main'))
     jobs:
       - template: job_templates/job-helm-ci.yml
       - template: job_templates/job-deploy.yml
