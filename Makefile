@@ -1,4 +1,13 @@
 # ---------------------------------------------------------
+# Load .env if present
+# ---------------------------------------------------------
+ifneq (,$(wildcard .env))
+include .env
+# Export all keys from .env as environment vars for shell commands
+export $(shell sed -n 's/^\s*\([A-Za-z_][A-Za-z0-9_]*\)\s*=.*/\1/p' .env)
+endif
+
+# ---------------------------------------------------------
 # Default target: help
 # ---------------------------------------------------------
 .DEFAULT_GOAL := help
@@ -65,10 +74,11 @@ help: ## Show this help message
 	@echo ""
 	@echo "$(YELLOW)Available commands:$(RESET)"
 	@echo ""
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
+	@grep -hE '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) \
 		| sort \
 		| awk 'BEGIN {FS = ":.*?## "}; {printf "  $(CYAN)%-25s$(RESET) %s\n", $$1, $$2}'
 	@echo ""
+
 
 # ---------------------------------------------------------
 # INFRA (Terraform)
@@ -153,6 +163,18 @@ cosign-install: ## Install cosign if missing
 		curl -sSfL https://github.com/sigstore/cosign/releases/latest/download/cosign-$(shell uname -s | tr '[:upper:]' '[:lower:]')-amd64 \
 			-o cosign && chmod +x cosign && sudo mv cosign /usr/local/bin/cosign \
 	)
+
+image-digest: ## Get remote image digest after push
+	@test -n "$(IMAGE)" || (echo "IMAGE variable is empty" && exit 1)
+	@echo "Pushing image (required for digest)..."
+	docker push $(IMAGE) >/dev/null
+	@echo ""
+	@echo "Retrieving remote digest..."
+	@DIGEST=$$(docker inspect --format='{{index .RepoDigests 0}}' $(IMAGE) | cut -d'@' -f2); \
+		echo "IMAGE_DIGEST=$$DIGEST"; \
+		echo ""; \
+		echo "👉 Use it like:"; \
+		echo "make sign-digest IMAGE_DIGEST=$$DIGEST"
 
 sign: cosign-install ## Sign image with Cosign (by tag)
 	cosign sign --key $(COSIGN_KEY) $(IMAGE)
