@@ -182,7 +182,7 @@ stages:
 #   - Con approval configurado en Environment "dev"
 # =========================================================
 - stage: Deploy_Dev
-  displayName: Deploy to DEV (namespace: nn-devops-dev)
+  displayName: Deploy to DEV
   dependsOn: PushAndSign
   condition: >
     and(
@@ -256,7 +256,7 @@ stages:
 #   - Solo cuando la rama es main (no en PR)
 # =========================================================
 - stage: Deploy_Staging
-  displayName: Deploy to STAGING (namespace: nn-devops-staging)
+  displayName: Deploy to STAGING
   dependsOn: Deploy_Dev
   condition: >
     and(
@@ -328,7 +328,7 @@ stages:
 #   - Igual condición que STAGING
 # =========================================================
 - stage: Deploy_Prod
-  displayName: Deploy to PROD (namespace: nn-devops-prod)
+  displayName: Deploy to PROD
   dependsOn: Deploy_Staging
   condition: >
     and(
