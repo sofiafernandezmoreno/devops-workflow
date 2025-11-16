@@ -6,7 +6,7 @@
 
 ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![Version: 1.0.0](https://img.shields.io/badge/Version-1.0.0-informational?style=flat-square)
 
-[![Build Status](https://dev.azure.com/sofia-nn-challenge/nn-devops-challenge/_apis/build/status%2Fsofiafernandezmoreno.nn-devops-challenge?branchName=main)](https://dev.azure.com/sofia-nn-challenge/nn-devops-challenge/_build/latest?definitionId=1&branchName=main)
+[![Build Status](https://dev.azure.com/sofia-nn-challenge/nn-devops-challenge/_apis/build/status%2Fsofiafernandezmoreno.nn-devops-challenge%20(2)?branchName=main)](https://dev.azure.com/sofia-nn-challenge/nn-devops-challenge/_build/latest?definitionId=2&branchName=main)
 
 This repository implements a full DevOps workflow designed for the NN DevOps Challenge.
 # 🎯 Challenge Requirements (Mapping)
@@ -51,57 +51,165 @@ Terraform provisions:
 ## 🗺️ Architecture Diagram (Infrastructure)
 
 ```mermaid
-flowchart TD
+flowchart LR
 
-subgraph Azure DevOps
-  A[Azure DevOps Pipeline] --> B[Build Artifacts<br>Docker Image + Signature]
+%% =========================
+%% Azure DevOps side
+%% =========================
+subgraph AzureDev["Azure DevOps"]
+  PIPE["CI/CD Pipeline<br/>Build • Test • Scan • Sign • Deploy"]
 end
 
-subgraph AWS_Account
-  C[S3 Backend + DynamoDB Lock]:::infra
-  D[ECR Repository]:::infra
-  E[EKS Cluster]:::cluster
-  F[Node Groups]:::cluster
-  G[OIDC Provider]:::cluster
-  H[KMS Key]:::security
-  I[VPC + Subnets]:::network
+%% =========================
+%% AWS account side
+%% =========================
+subgraph AWS["AWS Account"]
 
-  E --> F
-  E --> G
-  E --> H
+  subgraph Backend["Terraform Backend"]
+    S3["S3 State Bucket<br/>Versioned + Encrypted"]
+    DDB["DynamoDB<br/>State Locking"]
+  end
 
-  D --> E
+  subgraph Network["Networking"]
+    VPC["VPC"]
+    SUBNETS["Private & Public Subnets"]
+  end
+
+  subgraph ECRGrp["ECR Registry"]
+    ECR_IMG["Container Images<br/>(tags + digests)"]
+    ECR_SIG["Cosign Signatures"]
+  end
+
+  subgraph EKSGrp["EKS Cluster"]
+    EKS["EKS Control Plane"]
+    NG["Managed Node Groups"]
+
+    subgraph NS["Kubernetes Namespaces"]
+      DEV["dev"]
+      STG["staging"]
+      PROD["prod"]
+    end
+  end
+
+  OIDC["OIDC Provider / IRSA"]
+  KMS["KMS Key<br/>Secrets & Config Encryption"]
+
 end
 
-A --> D
-A --> C
+%% =========================
+%% Flows
+%% =========================
 
-classDef infra fill:#0e7490,stroke:#0f172a,color:white;
-classDef cluster fill:#1d4ed8,stroke:#0f172a,color:white;
-classDef network fill:#15803d,stroke:#0f172a,color:white;
-classDef security fill:#be123c,stroke:#0f172a,color:white;
+%% Pipeline writes
+PIPE --> ECR_IMG
+PIPE --> ECR_SIG
+PIPE --> S3
+PIPE --> EKS
+
+%% Terraform backend
+S3 --- DDB
+
+%% EKS relationships
+EKS --> NG
+EKS --> DEV
+EKS --> STG
+EKS --> PROD
+EKS --> OIDC
+EKS --> KMS
+
+%% Networking
+VPC --> SUBNETS
+EKS --> VPC
+NG --> SUBNETS
+
+%% =========================
+%% Styling
+%% =========================
+classDef pipeline fill:#4f46e5,stroke:#1e1b4b,color:white,font-weight:bold;
+classDef infra fill:#0e7490,stroke:#0f172a,color:white,font-weight:bold;
+classDef eks fill:#1d4ed8,stroke:#0f172a,color:white,font-weight:bold;
+classDef net fill:#15803d,stroke:#064e3b,color:white,font-weight:bold;
+classDef security fill:#be123c,stroke:#450a0a,color:white,font-weight:bold;
+
+class PIPE pipeline
+class S3,DDB,ECR_IMG,ECR_SIG infra
+class EKS,NG,DEV,STG,PROD,OIDC eks
+class VPC,SUBNETS net
+class KMS security
+
 
 ```
 
 ## 🐳 CI/CD Pipeline Diagram (Azure DevOps)
 
 ```mermaid
-flowchart LR
+flowchart TD
 
-A[Pull Request Validation] --> B[Build]
-B --> C[Docker Build]
-C --> D[Trivy Scan]
-D --> E[Cosign Sign]
-E --> F[Push to ECR]
+%% =========================
+%% Feature / non-main branches
+%% =========================
+subgraph Feature["Feature / Non-main branches"]
+  FB_COMMIT["Commit on feature/* branch"] --> FB_BTS["BuildTestScan<br/>Unit tests + Maven + Trivy"]
+  FB_BTS --> FB_OK{"BuildTestScan succeeded?"}
+  FB_OK -->|Yes| FB_PUSH["PushAndSign<br/>Docker build + Cosign sign + push to ECR"]
+  FB_OK -->|No| FB_STOP["Stop pipeline"]
+end
 
-F --> G{Deploy to Dev?}
-G --> H[Helm Deploy to Dev]
+%% =========================
+%% Pull Request validation
+%% =========================
+subgraph PRFlow["Pull Request validation → main"]
+  PR["Open PR targeting main"] --> PR_BTS["BuildTestScan<br/>Validation pipeline"]
+  PR_BTS --> PR_OK{"BuildTestScan succeeded?"}
+  PR_OK -->|Yes| PR_PUSH["PushAndSign<br/>(same flow as branches)"]
+  PR_OK -->|No| PR_STOP["Stop PR pipeline"]
+end
 
-H --> I{Promote to Staging?}
-I -->|Manual Approval| J[Deploy to Staging]
+%% =========================
+%% main branch CI/CD
+%% =========================
+subgraph Main["main branch CI/CD"]
+  MAIN_COMMIT["Commit merged into main"] --> MAIN_BTS["BuildTestScan"]
+  MAIN_BTS --> MAIN_OK{"BuildTestScan succeeded?"}
+  MAIN_OK -->|Yes| MAIN_PUSH["PushAndSign<br/>build + sign + push"]
+  MAIN_OK -->|No| MAIN_STOP["Stop pipeline"]
 
-J --> K{Promote to Prod?}
-K -->|Manual Approval| L[Deploy to Prod]
+  MAIN_PUSH --> APPROVE_DEV{"Manual approval<br/>Deploy to dev?"}
+  APPROVE_DEV -->|Approved| VERIFY_DEV["Cosign verify (dev)"]
+  VERIFY_DEV --> DEPLOY_DEV["Deploy_Dev<br/>Helm upgrade to dev namespace"]
+
+  DEPLOY_DEV --> APPROVE_STG{"Manual approval<br/>Promote to staging?"}
+  APPROVE_STG -->|Approved| VERIFY_STG["Cosign verify (staging)"]
+  VERIFY_STG --> DEPLOY_STG["Deploy_Staging<br/>Helm upgrade to staging"]
+
+  DEPLOY_STG --> APPROVE_PROD{"Manual approval<br/>Promote to prod?"}
+  APPROVE_PROD -->|Approved| VERIFY_PROD["Cosign verify (prod)"]
+  VERIFY_PROD --> DEPLOY_PROD["Deploy_Prod<br/>Helm upgrade to prod"]
+end
+
+%% =========================
+%% Renovate
+%% =========================
+RENOVATE["Renovate Bot<br/>(scheduled weekly)"] --> RENOVATE_PR["Automated PRs<br/>Dependencies • Terraform • Docker • Helm"]
+RENOVATE_PR --> PR
+
+%% =========================
+%% Styling
+%% =========================
+classDef stage fill:#6b21a8,stroke:#3b0764,color:white,font-weight:bold;
+classDef build fill:#1d4ed8,stroke:#0f172a,color:white,font-weight:bold;
+classDef scan fill:#be123c,stroke:#450a0a,color:white,font-weight:bold;
+classDef sign fill:#0f766e,stroke:#064e3b,color:white,font-weight:bold;
+classDef deploy fill:#15803d,stroke:#064e3b,color:white,font-weight:bold;
+classDef renovate fill:#9333ea,stroke:#581c87,color:white,font-weight:bold;
+
+class FB_BTS,PR_BTS,MAIN_BTS build
+class FB_PUSH,PR_PUSH,MAIN_PUSH stage
+class VERIFY_DEV,VERIFY_STG,VERIFY_PROD sign
+class DEPLOY_DEV,DEPLOY_STG,DEPLOY_PROD deploy
+class APPROVE_DEV,APPROVE_STG,APPROVE_PROD stage
+class RENOVATE,RENOVATE_PR renovate
+
 
 ```
 
