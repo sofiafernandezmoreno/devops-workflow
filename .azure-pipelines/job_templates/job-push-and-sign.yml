@@ -83,7 +83,7 @@ jobs:
 
         echo "Reading image digest reference from artifact..."
         IMAGE_DIGEST_REF="$(cat $(Pipeline.Workspace)/image-ref/image-digest.txt)"
-        echo "Image digest to sign: ${IMAGE_DIGESTREF}"
+        echo "Image digest to sign: ${IMAGE_DIGEST_REF}"
 
         echo "Signing image with Cosign (by digest, key without password)..."
         ./cosign sign --key cosign.key "${IMAGE_DIGEST_REF}"
@@ -116,7 +116,7 @@ jobs:
         docker logout "$(CONTAINER_REGISTRY)" || true
 
   # ----------------------------------------------------
-  # PUBLISH IMAGE REFERENCE ARTIFACT
+  # PUBLISH IMAGE REFERENCE ARTIFACTIMAGE_DIGEST_REF
   # ----------------------------------------------------
   - task: PublishBuildArtifacts@1
     displayName: Publish image-ref artifact
