@@ -487,28 +487,29 @@ To prove Helm deployments were applied to real Kubernetes namespaces:
 ```
 kubectl get pods -n nn-devops-dev
 ```
-👉 Screenshot or GIF: [here]
+👉 Screenshot: ![alt text](docs/img/k8s_dev.png)
 
 Staging and Prod namespaces
-👉 Screenshot: [here]
+👉 Screenshot: ![alt text](docs/img/pods.png)
 
 Rolling update via Helm
-👉 GIF: [here]
+👉 Screenshot: ![alt text](docs/img/helm.png)
 
 Application logs via kubectl logs
-👉 Screenshot: [here]
+👉 Screenshot: ![alt text](docs/img/logs.png)
 
 This confirms the application is deployed and running across all environments.
 
 ### Kubernetes Objects Deployment
 
-To validate Helm chart correctness:
-
+* To validate Helm chart correctness:
+```
 kubectl get deploy,svc,ing -n dev
-👉 Screenshot: [here]
+```
+👉 Screenshot: ![alt text](docs/img/stack.png)
 
-Deployment YAML generated (helm template)
-👉 Screenshot: [here]
+* Deployment YAML generated (helm template)
+👉 Screenshot: ![alt text](docs/img/helm_release.png)
 
 These validate that the chart produces valid and functional Kubernetes objects.
 
