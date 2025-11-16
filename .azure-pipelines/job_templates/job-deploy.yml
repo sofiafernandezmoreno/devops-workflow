@@ -40,21 +40,17 @@ jobs:
               echo "Image (tag): ${IMAGE_TAG_REF}"
               echo "Image (digest): ${IMAGE_DIGEST_REF}"
 
-              # Se asume que aws, kubectl y helm ya están instalados en el agente.
-
-              if ! command -v cosign >/dev/null 2>&1; then
-                echo "Installing Cosign (local)..."
-                curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
-                chmod +x cosign
-              else
-                ln -s "$(command -v cosign)" ./cosign || true
-              fi
-
+              # ----- COSIGN SIGNATURE VERIFICATION -----
               echo "Decoding Cosign public key..."
               echo "$COSIGN_PUBLIC_KEY_B64" | base64 -d > cosign.pub
 
               echo "Verifying image signature with Cosign (by digest) before deploy..."
-              ./cosign verify --key cosign.pub "${IMAGE_DIGEST_REF}"
+              ./cosign verify \
+                --key cosign.pub \
+                "${IMAGE_DIGEST_REF}"
+
+              echo "Cosign verification OK, proceeding with deployment..."
+              # -----------------------------------------
 
               echo "Updating kubeconfig for cluster ${CLUSTER_NAME}..."
               aws eks update-kubeconfig --region "$(AWS_REGION)" --name "${CLUSTER_NAME}"
@@ -64,3 +60,4 @@ jobs:
 
               echo "Deploying with Helm using image (tag): ${IMAGE_TAG_REF}"
               ./scripts/deploy.sh "${{ parameters.envName }}" "${IMAGE_TAG_REF}" ./helm "${NAMESPACE}"
+
