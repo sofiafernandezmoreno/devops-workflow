@@ -12,77 +12,74 @@ parameters:
     type: string
     default: ''
 stages:
-  # # ===========================
-  # # STAGE 0 — RENOVATE
-  # # ===========================
-  # - stage: Renovate
-  #   displayName: Renovate Dependencies
-  #   condition: or(eq(variables['Build.Reason'], 'Schedule'), eq(variables['RUN_RENOVATE'], 'true'))
-  #   jobs:
-  #   - job: renovate
-  #     pool:
-  #       name: 'sofia-self-hosted'
-  #     steps:
-  #     - checkout: self
-  #     - bash: |
-  #         set -euo pipefail
-  #         echo "Running Renovate..."
-  #         docker run --rm \
-  #           -e RENOVATE_TOKEN=$(RENOVATE_TOKEN) \
-  #           -e RENOVATE_PLATFORM=azure \
-  #           -e RENOVATE_ENDPOINT=https://dev.azure.com \
-  #           ghcr.io/renovatebot/renovate:latest \
-  #           "$(System.CollectionUri)$(System.TeamProject)/_git/$(Build.Repository.Name)"
-  #       env:
-  #         RENOVATE_TOKEN: $(RENOVATE_TOKEN)
+# --------------------------------------------------------
+# 0) Renovate (only schedule or RUN_RENOVATE = true)
+# --------------------------------------------------------
+  - stage: Renovate
+    displayName: Renovate Dependencies
+    condition: or(eq(variables['Build.Reason'], 'Schedule'),eq(variables['RUN_RENOVATE'], 'true')  )
+    jobs:
+      - template: job_templates/job-renovate.yml
 
-  # 1) Build + tests + Trivy
-  - stage: Build_Test_Scan
+# --------------------------------------------------------
+# 1) Build + Test + Trivy (always)
+# --------------------------------------------------------
+  - stage: BuildTestScan
     displayName: "Build + Tests + Trivy Scan"
-    condition: succeeded()
+    condition: always()
     jobs: 
       - template: ./job_templates/job-build-test-scan.yml
 
-  # 2) Push a ECR + Cosign 
+# --------------------------------------------------------
+# 2) Push to ECR + Cosign (always after BuildTestScan)
+# --------------------------------------------------------
   - stage: PushAndSign
     displayName: "Push to ECR & Cosign Sign"
     condition: succeeded()
-    dependsOn: Build_Test_Scan
+    dependsOn: BuildTestScan
     jobs:
       - template: ./job_templates/job-push-and-sign.yml
 
-  # 3) Deploy DEV
-  - template: ./job_templates/job-deploy.yml
-    parameters:
-      stageName: 'Deploy_Dev'
-      displayName: 'Deploy to DEV (namespace: nn-devops-dev)'
-      envName: 'dev'
-      environmentName: 'dev'
-      namespaceVar: '$(NAMESPACE_DEV)'
-      clusterNameVar: '$(CLUSTER_NAME_DEV)'
-      dependsOnStage: 'PushAndSign'
-      extraCondition: "or(startsWith(variables['Build.SourceBranch'], 'refs/pull/'), eq(variables['Build.SourceBranch'], 'refs/heads/main'))"
+# --------------------------------------------------------
+# 3) Deploy DEV (always after PushAndSign)
+# --------------------------------------------------------
+  - stage: Deploy_Dev
+    displayName: 'Deploy to DEV (namespace: nn-devops-dev)'
+    dependsOn: PushAndSign
+    condition: succeeded()  
+    jobs:
+      - template: job_templates/job-deploy.yml
+        parameters:
+          envName: 'dev'
+          environmentName: 'dev'
+          namespaceVar: '$(NAMESPACE_DEV)'
+          clusterNameVar: '$(CLUSTER_NAME_DEV)'
+# --------------------------------------------------------
+# 4) Deploy STAGING (only on main)
+# --------------------------------------------------------
+- stage: Deploy_Staging
+  displayName: 'Deploy to STAGING (namespace: nn-devops-staging)'
+  dependsOn: Deploy_Dev
+  condition: and(succeeded(),eq(variables['Build.SourceBranch'], 'refs/heads/main')
+  jobs:
+    - template: job_templates/job-deploy.yml
+      parameters:
+        envName: 'staging'
+        environmentName: 'staging'
+        namespaceVar: '$(NAMESPACE_STAGING)'
+        clusterNameVar: '$(CLUSTER_NAME_STAGING)'
 
-  # 4) Deploy STAGING
-  - template: ./job_templates/job-deploy.yml
-    parameters:
-      stageName: 'Deploy_Staging'
-      displayName: 'Deploy to STAGING (namespace: nn-devops-staging)'
-      envName: 'staging'
-      environmentName: 'staging'
-      namespaceVar: '$(NAMESPACE_STAGING)'
-      clusterNameVar: '$(CLUSTER_NAME_STAGING)'
-      dependsOnStage: 'Deploy_Dev'
-      extraCondition: "and(eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))"
-
-  # 5) Deploy PROD
-  - template: ./job_templates/job-deploy.yml
-    parameters:
-      stageName: 'Deploy_Prod'
-      displayName: 'Deploy to PROD (namespace: nn-devops-prod)'
-      envName: 'prod'
-      environmentName: 'prod'
-      namespaceVar: '$(NAMESPACE_PROD)'
-      clusterNameVar: '$(CLUSTER_NAME_PROD)'
-      dependsOnStage: 'Deploy_Staging'
-      extraCondition: "and(eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))"
+# --------------------------------------------------------
+# 5) Deploy PROD (only on main)
+# --------------------------------------------------------
+- stage: Deploy_Prod
+  displayName: 'Deploy to PROD (namespace: nn-devops-prod)'
+  dependsOn: Deploy_Staging
+  condition: and(succeeded(),eq(variables['Build.SourceBranch'], 'refs/heads/main')
+  jobs:
+    - template: job_templates/job-deploy.yml
+      parameters:
+        envName: 'prod'
+        environmentName: 'prod'
+        namespaceVar: '$(NAMESPACE_PROD)'
+        clusterNameVar: '$(CLUSTER_NAME_PROD)'

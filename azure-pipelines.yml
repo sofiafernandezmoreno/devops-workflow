@@ -1,12 +1,18 @@
 trigger:
   branches:
     include:
-      - '*'
-    exclude:
-      - main          
+      - '*'          # CI on all branches
 
 pr:
-- main  
+- main              # PR validation into main
+
+schedules:
+- cron: "0 2 * * *"          # Nightly Renovate at 02:00
+  displayName: Nightly Renovate
+  branches:
+    include:
+      - main
+  always: true
 
 pool:
   name: 'sofia-self-hosted'

@@ -1,7 +1,9 @@
-# .azure-pipelines/job-renovate.yml
+# .azure-pipelines/job_templates/job-renovate.yml
+parameters: {}
+
 jobs:
 - job: renovate
-  displayName: Run Renovate (Azure DevOps + GitHub)
+  displayName: Run Renovate
   pool:
     name: 'sofia-self-hosted'
   steps:

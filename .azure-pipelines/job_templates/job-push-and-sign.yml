@@ -1,10 +1,14 @@
-# .azure-pipelines/job-push-and-sign.yml
+# .azure-pipelines/job_templates/job-push-and-sign.yml
+parameters: {}
+
 jobs:
 - job: push_sign
   displayName: Push image to ECR & Cosign
   pool:
     name: 'sofia-self-hosted'
   steps:
+  - checkout: self
+
   - download: current
     artifact: src
     displayName: Download source artifact
@@ -26,6 +30,7 @@ jobs:
           sudo installer -pkg AWSCLIV2.pkg -target /
         fi
 
+        # Ensure ECR repo exists
         aws ecr describe-repositories \
           --repository-names "$(ECR_REPO)" \
           --region "$(AWS_REGION)" >/dev/null 2>&1 || \
@@ -33,14 +38,16 @@ jobs:
           --repository-name "$(ECR_REPO)" \
           --region "$(AWS_REGION)" >/dev/null
 
+        # Login to ECR
         aws ecr get-login-password --region "$(AWS_REGION)" \
           | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
 
+        # Build & push image
         cd app
         docker build -t "$(IMAGE_FULL)" .
-
         docker push "$(IMAGE_FULL)"
 
+        # Store image reference
         mkdir -p $(Pipeline.Workspace)/image-ref
         echo "$(IMAGE_FULL)" > $(Pipeline.Workspace)/image-ref/image.txt
 
