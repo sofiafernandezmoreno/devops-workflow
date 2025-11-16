@@ -70,6 +70,9 @@ jobs:
   - task: Bash@3
     displayName: Cosign sign image (by digest)
     env:
+      AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+      AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+      AWS_REGION: $(AWS_REGION)
       COSIGN_PASSWORD: $(COSIGN_PASSWORD)
     inputs:
       targetType: inline
@@ -86,15 +89,27 @@ jobs:
 
         echo "Reading image digest reference from artifact..."
         IMAGE_DIGEST_REF="$(cat $(Pipeline.Workspace)/image-ref/image-digest.txt)"
+        echo "Image digest to sign: ${IMAGE_DIGEST_REF}"
+
+        echo "Logging into ECR before signing..."
+        aws ecr get-login-password --region "$(AWS_REGION)" \
+          | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
 
         echo "Signing image with Cosign (by digest)..."
         COSIGN_PASSWORD="${COSIGN_PASSWORD:-}" ./cosign sign --key cosign.key "${IMAGE_DIGEST_REF}"
+
+        echo "Logging out from ECR after signing..."
+        docker logout "$(CONTAINER_REGISTRY)" || true
 
   # ----------------------------------------------------
   # COSIGN VERIFY (GLOBAL GATE, BY DIGEST)
   # ----------------------------------------------------
   - task: Bash@3
-    displayName: Cosign verify (global gate, by digest)
+    displayName: Cosign verify
+    env:
+      AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+      AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+      AWS_REGION: $(AWS_REGION)
     inputs:
       targetType: inline
       script: |
@@ -109,9 +124,17 @@ jobs:
 
         echo "Reading image digest reference from artifact..."
         IMAGE_DIGEST_REF="$(cat $(Pipeline.Workspace)/image-ref/image-digest.txt)"
+        echo "Image digest to verify: ${IMAGE_DIGEST_REF}"
+
+        echo "Logging into ECR before verification..."
+        aws ecr get-login-password --region "$(AWS_REGION)" \
+          | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
 
         echo "Verifying image signature with Cosign (by digest)..."
         ./cosign verify --key cosign.pub "${IMAGE_DIGEST_REF}"
+
+        echo "Logging out from ECR after verification..."
+        docker logout "$(CONTAINER_REGISTRY)" || true
 
   # ----------------------------------------------------
   # PUBLISH IMAGE REFERENCE ARTIFACT
