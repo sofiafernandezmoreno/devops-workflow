@@ -2,8 +2,6 @@
 jobs:
 - job: push_and_sign
   displayName: Push & Sign Image
-  pool:
-    name: Default
 
   steps:
 

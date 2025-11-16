@@ -6,8 +6,6 @@ parameters:
 jobs:
 - job: build_test_scan
   displayName: Build, Test & Scan
-  pool:
-    name: Default
 
   steps:
 
