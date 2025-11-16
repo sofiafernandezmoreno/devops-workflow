@@ -25,6 +25,7 @@ jobs:
       script: |
         set -euo pipefail
         cd app
+        export DOCKER_DEFAULT_PLATFORM=linux/amd64
         docker build -t "$(IMAGE_FULL)" .
 
   - task: Bash@3
