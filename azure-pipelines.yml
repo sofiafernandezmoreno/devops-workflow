@@ -11,5 +11,24 @@ pr:
 pool:
   name: 'sofia-self-hosted'
 
+           
+variables:
+  IMAGE_NAME: 'nn-devops-challenge'
+  IMAGE_TAG: '$(Build.BuildNumber)'
+  ECR_REPO: 'nn-devops-challenge'
+
+  CONTAINER_REGISTRY: '$(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com'
+  IMAGE_FULL: '$(CONTAINER_REGISTRY)/$(ECR_REPO):$(IMAGE_TAG)'
+
+  CLUSTER_NAME_DEV: 'nn-devops-challenge-cluster'
+  CLUSTER_NAME_STAGING: 'nn-devops-challenge-cluster'
+  CLUSTER_NAME_PROD: 'nn-devops-challenge-cluster'
+
+  NAMESPACE_DEV: 'nn-devops-dev'
+  NAMESPACE_STAGING: 'nn-devops-staging'
+  NAMESPACE_PROD: 'nn-devops-prod'
+
+  RUN_RENOVATE: 'false'
+
 stages:
 - template: .azure-pipelines/main_template.yml
