@@ -44,7 +44,7 @@ stages:
 # 3) Deploy DEV (always after PushAndSign)
 # --------------------------------------------------------
   - stage: Deploy_Dev
-    displayName: 'Deploy to DEV (namespace: nn-devops-dev)'
+    displayName: 'Deploy to DEV'
     dependsOn: PushAndSign
     condition: succeeded()  
     jobs:
@@ -57,29 +57,29 @@ stages:
 # --------------------------------------------------------
 # 4) Deploy STAGING (only on main)
 # --------------------------------------------------------
-- stage: Deploy_Staging
-  displayName: 'Deploy to STAGING (namespace: nn-devops-staging)'
-  dependsOn: Deploy_Dev
-  condition: and(succeeded(),eq(variables['Build.SourceBranch'], 'refs/heads/main')
-  jobs:
-    - template: job_templates/job-deploy.yml
-      parameters:
-        envName: 'staging'
-        environmentName: 'staging'
-        namespaceVar: '$(NAMESPACE_STAGING)'
-        clusterNameVar: '$(CLUSTER_NAME_STAGING)'
+  - stage: Deploy_Staging
+    displayName: 'Deploy to STAGING'
+    dependsOn: Deploy_Dev
+    condition: and(succeeded(),eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - template: job_templates/job-deploy.yml
+        parameters:
+          envName: 'staging'
+          environmentName: 'staging'
+          namespaceVar: '$(NAMESPACE_STAGING)'
+          clusterNameVar: '$(CLUSTER_NAME_STAGING)'
 
 # --------------------------------------------------------
 # 5) Deploy PROD (only on main)
 # --------------------------------------------------------
-- stage: Deploy_Prod
-  displayName: 'Deploy to PROD (namespace: nn-devops-prod)'
-  dependsOn: Deploy_Staging
-  condition: and(succeeded(),eq(variables['Build.SourceBranch'], 'refs/heads/main')
-  jobs:
-    - template: job_templates/job-deploy.yml
-      parameters:
-        envName: 'prod'
-        environmentName: 'prod'
-        namespaceVar: '$(NAMESPACE_PROD)'
-        clusterNameVar: '$(CLUSTER_NAME_PROD)'
+  - stage: Deploy_Prod
+    displayName: 'Deploy to PROD'
+    dependsOn: Deploy_Staging
+    condition: and(succeeded(),eq(variables['Build.SourceBranch'], 'refs/heads/main'))
+    jobs:
+      - template: job_templates/job-deploy.yml
+        parameters:
+          envName: 'prod'
+          environmentName: 'prod'
+          namespaceVar: '$(NAMESPACE_PROD)'
+          clusterNameVar: '$(CLUSTER_NAME_PROD)'
