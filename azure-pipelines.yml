@@ -1,13 +1,13 @@
 trigger:
   branches:
     include:
-      - '*'
+      - '*'          
 
 pr:
-- main
+- main              
 
 schedules:
-- cron: "0 2 * * *"          # At 2:00 AM UTC (4:00 AM CEST) everyday
+- cron: "0 2 * * *"          # Renovate nightly at 02:00
   displayName: Nightly Renovate
   branches:
     include:
@@ -36,13 +36,13 @@ stages:
   # 0) Renovate 
   - template: .azure-pipelines/stages-renovate.yml
 
-  # 1) Build + Tests + Trivy
+  # 1) Build + Tests + Trivy 
   - template: .azure-pipelines/stages-build-test-scan.yml
 
-  # 2) Push a ECR + Cosign
+  # 2) Push a ECR + Cosign 
   - template: .azure-pipelines/stages-push-and-sign.yml
 
-  # 3) Deploy DEV
+  # 3) Deploy DEV 
   - template: .azure-pipelines/stages-deploy.yml
     parameters:
       stageName: 'Deploy_Dev'
@@ -52,9 +52,9 @@ stages:
       namespaceVar: '$(NAMESPACE_DEV)'
       clusterNameVar: '$(CLUSTER_NAME_DEV)'
       dependsOnStage: 'PushAndSign'
-      extraCondition: "or(startsWith(variables['Build.SourceBranch'], 'refs/pull/'), eq(variables['Build.SourceBranch'], 'refs/heads/main'))"
+      extraCondition: "succeeded()"
 
-  # 4) Deploy STAGING
+  # 4) Deploy STAGING 
   - template: .azure-pipelines/stages-deploy.yml
     parameters:
       stageName: 'Deploy_Staging'
@@ -64,9 +64,9 @@ stages:
       namespaceVar: '$(NAMESPACE_STAGING)'
       clusterNameVar: '$(CLUSTER_NAME_STAGING)'
       dependsOnStage: 'Deploy_Dev'
-      extraCondition: "and(eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))"
+      extraCondition: "and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))"
 
-  # 5) Deploy PROD
+  # 5) Deploy PROD 
   - template: .azure-pipelines/stages-deploy.yml
     parameters:
       stageName: 'Deploy_Prod'
@@ -76,4 +76,4 @@ stages:
       namespaceVar: '$(NAMESPACE_PROD)'
       clusterNameVar: '$(CLUSTER_NAME_PROD)'
       dependsOnStage: 'Deploy_Staging'
-      extraCondition: "and(eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))"
+      extraCondition: "and(succeeded(), eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))"

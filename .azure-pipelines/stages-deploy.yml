@@ -2,12 +2,12 @@
 parameters:
   stageName: ''
   displayName: ''
-  envName: ''
-  environmentName: ''
-  namespaceVar: ''
-  clusterNameVar: ''
-  dependsOnStage: ''
-  extraCondition: 'true'
+  envName: ''            # dev / staging / prod
+  environmentName: ''    # environment in azure devops
+  namespaceVar: ''       # $(NAMESPACE_DEV)
+  clusterNameVar: ''     # (CLUSTER_NAME_DEV)
+  dependsOnStage: ''     # PushAndSign / Deploy_Dev / Deploy_Staging
+  extraCondition: 'succeeded()'
 
 stages:
 - stage: ${{ parameters.stageName }}

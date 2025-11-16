@@ -2,7 +2,11 @@
 stages:
 - stage: Renovate
   displayName: Renovate Dependencies
-  condition: or(eq(variables['Build.Reason'], 'Schedule'),eq(variables['RUN_RENOVATE'], 'true'))
+  condition: > 
+    or(
+      eq(variables['Build.Reason'], 'Schedule'),
+      eq(variables['RUN_RENOVATE'], 'true')
+    )
   jobs:
   - job: renovate
     displayName: Run Renovate (Azure DevOps + GitHub)
