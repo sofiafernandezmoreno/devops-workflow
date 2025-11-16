@@ -64,10 +64,10 @@ jobs:
         echo "Leaving Docker login in place for Cosign steps."
 
   # ----------------------------------------------------
-  # 2) COSIGN SIGN (BY DIGEST, KEY SIN PASSWORD)
+  # 2) COSIGN SIGN (BY DIGEST, FIRMA LOCAL)
   # ----------------------------------------------------
   - task: Bash@3
-    displayName: Cosign sign image (by digest)
+    displayName: Cosign sign image (by digest, local signature)
     env:
       AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
       AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
@@ -89,25 +89,28 @@ jobs:
         IMAGE_DIGEST_REF="$(cat $(Pipeline.Workspace)/image-ref/image-digest.txt)"
         echo "Image digest to sign: ${IMAGE_DIGEST_REF}"
 
-        echo "Ensuring Docker login to ECR (for Cosign)..."
+        echo "Ensuring Docker login to ECR (for Cosign read)..."
         aws ecr get-login-password --region "$(AWS_REGION)" \
           | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
 
-        echo "Signing image with Cosign (by digest)..."
-        COSIGN_EXPERIMENTAL=1 ./cosign \
+        echo "Signing image with Cosign (by digest, writing local signature)..."
+        ./cosign \
           -t 60s \
-          -d \
           sign \
           --key cosign.key \
           --tlog-upload=false \
+          --upload=false \
           --yes \
+          --output-signature "$(Pipeline.Workspace)/image-ref/image.sig" \
           "${IMAGE_DIGEST_REF}"
-        echo "Done signing image."
+
+        echo "Done signing image. Signature stored at $(Pipeline.Workspace)/image-ref/image.sig"
+
 
 
 
   # ----------------------------------------------------
-  # 3) COSIGN VERIFY (GLOBAL GATE, BY DIGEST)
+  # 3) COSIGN VERIFY (GLOBAL GATE, BY DIGEST + LOCAL SIGNATURE)
   # ----------------------------------------------------
   - task: Bash@3
     displayName: Cosign verify (global gate, by digest)
@@ -127,22 +130,28 @@ jobs:
         echo "Decoding public key..."
         echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
 
-        echo "Reading image digest reference from artifact..."
+        echo "Reading image digest and signature from artifact..."
         IMAGE_DIGEST_REF="$(cat $(Pipeline.Workspace)/image-ref/image-digest.txt)"
+        SIG_PATH="$(Pipeline.Workspace)/image-ref/image.sig"
+
         echo "Image digest to verify: ${IMAGE_DIGEST_REF}"
+        echo "Signature file: ${SIG_PATH}"
 
         echo "Ensuring Docker login to ECR (for Cosign verify)..."
         aws ecr get-login-password --region "$(AWS_REGION)" \
           | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
 
-        echo "Verifying image signature with Cosign (by digest)..."
-        ./cosign verify \
+        echo "Verifying image signature with Cosign (by digest, using local signature)..."
+        ./cosign \
+          -t 60s \
+          verify \
           --key cosign.pub \
-          --timeout 60s \
+          --signature "${SIG_PATH}" \
           "${IMAGE_DIGEST_REF}"
 
         echo "Logging out from ECR at the end of pipeline..."
         docker logout "$(CONTAINER_REGISTRY)" || true
+
 
   # ----------------------------------------------------
   # 4) PUBLISH IMAGE REFERENCE ARTIFACT
