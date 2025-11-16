@@ -90,6 +90,8 @@ jobs:
           --key cosign.key \
           --tlog-upload=false \
           --yes \
+          --verbose \
+          --timeout 60s \
           "${IMAGE_DIGEST_REF}"
 
 
