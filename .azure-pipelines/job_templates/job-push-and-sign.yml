@@ -6,7 +6,6 @@ jobs:
   displayName: Push image to ECR & Cosign
   pool:
     name: 'sofia-self-hosted'
-
   steps:
   - checkout: self
 
@@ -14,9 +13,6 @@ jobs:
     artifact: src
     displayName: Download source artifact
 
-  # ===========================
-  # Push image to ECR (secure)
-  # ===========================
   - task: Bash@3
     displayName: Push image to ECR
     env:
@@ -27,10 +23,6 @@ jobs:
       targetType: inline
       script: |
         set -euo pipefail
-
-        echo "Generating temporary Docker config to avoid storing credentials"
-        export DOCKER_CONFIG="$(mktemp -d)"
-        echo "Using DOCKER_CONFIG: $DOCKER_CONFIG"
 
         if ! command -v aws >/dev/null 2>&1; then
           echo "Installing AWS CLI..."
@@ -46,28 +38,24 @@ jobs:
           --repository-name "$(ECR_REPO)" \
           --region "$(AWS_REGION)" >/dev/null
 
-        echo "Logging into ECR securely..."
+        echo "🔐 Logging into ECR..."
         aws ecr get-login-password --region "$(AWS_REGION)" \
           | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
 
-        echo "Building image: $(IMAGE_FULL)"
+        echo "🐳 Building image: $(IMAGE_FULL)"
         cd app
         docker build -t "$(IMAGE_FULL)" .
 
-        echo "Pushing image to ECR..."
+        echo "📤 Pushing image to ECR..."
         docker push "$(IMAGE_FULL)"
 
-        echo "Storing pushed image reference..."
+        echo "📦 Storing pushed image reference..."
         mkdir -p $(Pipeline.Workspace)/image-ref
         echo "$(IMAGE_FULL)" > $(Pipeline.Workspace)/image-ref/image.txt
 
-        echo "Cleaning Docker credentials..."
-        rm -rf "$DOCKER_CONFIG"
-        echo "Docker credential store cleaned."
+        echo "🧹 Logging out from ECR to remove stored credentials..."
+        docker logout "$(CONTAINER_REGISTRY)" || true
 
-  # ===========================
-  # Cosign Sign
-  # ===========================
   - task: Bash@3
     displayName: Cosign sign image
     inputs:
@@ -85,9 +73,6 @@ jobs:
         echo "🔏 Signing image with Cosign..."
         COSIGN_PASSWORD="${COSIGN_PASSWORD:-}" cosign sign --key cosign.key "$(IMAGE_FULL)"
 
-  # ===========================
-  # Cosign Verify (Gate)
-  # ===========================
   - task: Bash@3
     displayName: Cosign verify (global gate)
     inputs:
@@ -104,9 +89,6 @@ jobs:
         echo "🔎 Verifying image signature..."
         cosign verify --key cosign.pub "$(IMAGE_FULL)"
 
-  # ===========================
-  # Publish image reference
-  # ===========================
   - task: PublishBuildArtifacts@1
     displayName: Publish image-ref artifact
     inputs:
