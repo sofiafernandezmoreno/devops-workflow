@@ -19,14 +19,36 @@ jobs:
         mvn -q -DskipTests=false test
 
   - task: Bash@3
-    displayName: Build Docker image
+    displayName: Build Docker image (linux/amd64)
     inputs:
       targetType: inline
       script: |
         set -euo pipefail
         cd app
-        export DOCKER_DEFAULT_PLATFORM=linux/amd64
-        docker build -t "$(IMAGE_FULL)" .
+
+        echo "Using IMAGE_FULL=${IMAGE_FULL}"
+
+        # Crear (si no existe) y usar un builder multi-arch
+        if ! docker buildx inspect multiarch-builder >/dev/null 2>&1; then
+          echo "Creating buildx builder 'multiarch-builder'..."
+          docker buildx create --use --name multiarch-builder
+        else
+          echo "Using existing buildx builder 'multiarch-builder'..."
+          docker buildx use multiarch-builder
+        fi
+
+        echo "Building image for platform linux/amd64..."
+        docker buildx build \
+          --platform linux/amd64 \
+          -t "${IMAGE_FULL}" \
+          --load \
+          .
+
+        echo "Image built: ${IMAGE_FULL}"
+
+        echo "Inspecting image architecture..."
+        docker inspect --format='Architecture: {{.Architecture}}' "${IMAGE_FULL}"
+
 
   - task: Bash@3
     displayName: Trivy scan (fail on CRITICAL)
