@@ -9,12 +9,10 @@ jobs:
     APP_NAME: 'nn-devops-challenge'
 
   steps:
-    # 1) Descargar el artifact con el image ref
     - download: current
       artifact: image-ref
       displayName: "Download image-ref artifact"
 
-    # 2) Instalar Helm 4
     - task: Bash@3
       displayName: "Install Helm 4"
       inputs:
@@ -33,18 +31,16 @@ jobs:
 
           helm version
 
-    # 3) Leer la imagen del artifact y lanzar helm-ci-test
     - task: Bash@3
-      displayName: "Run Helm lint + chartsnap snapshots (all envs)"
+      displayName: "Run Helm CI tests (lint + snapshots)"
       inputs:
         targetType: inline
         script: |
           set -euo pipefail
 
-          # Ruta correcta al artifact (Pipeline.Workspace -> env var expandida por Azure)
           IMAGE_REF_FILE="$(Pipeline.Workspace)/image-ref/image.txt"
-
           echo "Reading image ref from: $IMAGE_REF_FILE"
+
           if [ ! -f "$IMAGE_REF_FILE" ]; then
             echo "ERROR: $IMAGE_REF_FILE not found"
             ls -R

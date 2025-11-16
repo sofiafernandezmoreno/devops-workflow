@@ -37,10 +37,13 @@ TF_VARS_FILE  := $(TERRAFORM_DIR)/envs/$(ENV)/terraform.tfvars
 # Helm / deploy
 CHART_PATH    ?= helm
 DEPLOY_SCRIPT ?= scripts/deploy.sh
-
+CHART_ENVS_DIR            ?= $(CHART_PATH)/envs
 # Helm chartsnap (snapshot testing)
 CHART_SNAPSHOT_VALUES_DIR  ?= $(CHART_PATH)/ci
-CHART_SNAPSHOT_OUTPUT_DIR  ?= $(CHART_SNAPSHOT_VALUES_DIR)/snapshots
+CHART_SNAPSHOT_OUTPUT_DIR ?= $(CHART_PATH)/ci/snapshots
+
+IMAGE_REPOSITORY ?= $(REGISTRY)/$(APP_NAME)
+IMAGE_TAG        ?= $(TAG)
 
 # ---------------------------------------------------------
 # COSIGN (local keys)
@@ -201,8 +204,9 @@ verify-digest: cosign-install cosign-check ## Verify by digest
 # HELM LINT & SNAPSHOTS
 # ---------------------------------------------------------
 
-CHART_ENVS_DIR            ?= $(CHART_PATH)/envs
-CHART_SNAPSHOT_OUTPUT_DIR ?= $(CHART_PATH)/ci/snapshots
+# ---------------------------------------------------------
+# HELM LINT & SNAPSHOTS
+# ---------------------------------------------------------
 
 chartsnap-install: ## Install chartsnap
 	@helm plugin list 2>/dev/null | grep -q chartsnap \
@@ -224,7 +228,6 @@ helm-lint: ## Lint Helm chart with all env values
 		fi; \
 	done
 
-
 chartsnap-snapshot-all: chartsnap-install ## Snapshot all envs (dev/staging/prod)
 	@test -d "$(CHART_ENVS_DIR)" || (echo "Env values dir missing: $(CHART_ENVS_DIR)"; exit 1)
 	@mkdir -p "$(CHART_SNAPSHOT_OUTPUT_DIR)"
@@ -238,8 +241,7 @@ chartsnap-snapshot-all: chartsnap-install ## Snapshot all envs (dev/staging/prod
 		fi; \
 	done
 
-
-chartsnap-update: chartsnap-install ## Update snapshots for all envs
+chartsnap-update: chartsnap-install ## Update snapshots for all envs (local only)
 	@test -d "$(CHART_ENVS_DIR)" || (echo "Env values dir missing: $(CHART_ENVS_DIR)"; exit 1)
 	@mkdir -p "$(CHART_SNAPSHOT_OUTPUT_DIR)"
 	@echo "==> Updating snapshots in $(CHART_SNAPSHOT_OUTPUT_DIR)/__snapshots__"
@@ -251,7 +253,6 @@ chartsnap-update: chartsnap-install ## Update snapshots for all envs
 			  --set image.tag=$(IMAGE_TAG); \
 		fi; \
 	done
-
 
 helm-ci-test: helm-lint chartsnap-snapshot-all ## Helm lint + snapshot tests for dev/staging/prod
 	@echo "==> Helm CI tests completed (lint + snapshots for all envs)"
