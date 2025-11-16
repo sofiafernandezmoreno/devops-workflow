@@ -1,13 +1,13 @@
 trigger:
   branches:
     include:
-      - '*'
+      - '*'          # CI on all branches
 
 pr:
-- main              # Validación de PRs hacia main
+- main              # PR validation into main
 
 schedules:
-- cron: "0 2 * * *"          # Renovate nightly a las 02:00
+- cron: "0 2 * * *"          # Nightly Renovate at 02:00
   displayName: Nightly Renovate
   branches:
     include:
@@ -32,19 +32,103 @@ variables:
 
   RUN_RENOVATE: 'false'
 
+# =====================================================================
+# STAGE 0: RENOVATE (only on schedule or when RUN_RENOVATE=true)
+# =====================================================================
 stages:
-# 0) Renovate
 - stage: Renovate
   displayName: Renovate Dependencies
-  condition: or(eq(variables['Build.Reason'], 'Schedule'), eq(variables['RUN_RENOVATE'], 'true'))
+  condition: or(eq(variables['Build.Reason'], 'Schedule'),eq(variables['RUN_RENOVATE'], 'true'))
   jobs:
-  - template: .azure-pipelines/job-renovate.yml
+  - job: renovate
+    displayName: Run Renovate
+    pool:
+      name: 'sofia-self-hosted'
+    steps:
+    - checkout: self
 
-# 1) Build + Tests + Trivy
-  - template: .azure-pipelines/job-build-test-scan.yml
+    - task: Bash@3
+      displayName: Run Renovate
+      inputs:
+        targetType: inline
+        script: |
+          set -euo pipefail
 
+          echo "Running Renovate for repo: $(Build.Repository.Uri)"
 
-# 2) Push to ECR + Cosign
+          docker run --rm \
+            -e RENOVATE_TOKEN=$(RENOVATE_TOKEN) \
+            -e RENOVATE_PLATFORM=azure \
+            -e RENOVATE_ENDPOINT=https://dev.azure.com \
+            -e LOG_LEVEL=info \
+            ghcr.io/renovatebot/renovate:latest \
+            "$(System.CollectionUri)$(System.TeamProject)/_git/$(Build.Repository.Name)"
+      env:
+        RENOVATE_TOKEN: $(RENOVATE_TOKEN)
+
+# =====================================================================
+# STAGE 1: BUILD + TEST + TRIVY (always)
+# =====================================================================
+- stage: BuildTestScan
+  displayName: Build, Test & Security Scan
+  jobs:
+  - job: build_test_scan
+    displayName: Build + Tests + Trivy
+    pool:
+      name: 'sofia-self-hosted'
+    steps:
+    - checkout: self
+
+    - task: Bash@3
+      displayName: Unit tests (Maven)
+      inputs:
+        targetType: inline
+        script: |
+          set -euo pipefail
+          cd app
+          mvn -q -DskipTests=false test
+
+    - task: Bash@3
+      displayName: Build Docker image
+      inputs:
+        targetType: inline
+        script: |
+          set -euo pipefail
+          cd app
+          docker build -t "$(IMAGE_FULL)" .
+
+    - task: Bash@3
+      displayName: Trivy scan (fail on CRITICAL)
+      inputs:
+        targetType: inline
+        script: |
+          set -euo pipefail
+
+          mkdir -p "$HOME/.local/bin"
+          export PATH="$HOME/.local/bin:$PATH"
+
+          if ! command -v trivy >/dev/null 2>&1; then
+            echo "Installing Trivy into \$HOME/.local/bin..."
+            curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+              | sh -s -- -b "$HOME/.local/bin"
+          fi
+
+          echo "Trivy version:"
+          trivy --version
+
+          echo "Running Trivy scan on image: $(IMAGE_FULL)"
+          trivy image --severity CRITICAL --exit-code 1 --no-progress "$(IMAGE_FULL)"
+
+    - publish: $(Build.SourcesDirectory)
+      artifact: src
+      displayName: Publish source artifact
+
+# =====================================================================
+# STAGE 2: PUSH TO ECR + COSIGN
+#   - Runs on:
+#       - PR to main
+#       - push to main
+# =====================================================================
 - stage: PushAndSign
   displayName: Push to ECR & Cosign
   dependsOn: BuildTestScan
@@ -57,22 +141,166 @@ stages:
       )
     )
   jobs:
-  - template: .azure-pipelines/job-push-and-sign.yml
+  - job: push_sign
+    displayName: Push image to ECR & Cosign
+    pool:
+      name: 'sofia-self-hosted'
+    steps:
+    - checkout: self
 
-# 3) Deploy DEV (PR -> main + main)
+    - download: current
+      artifact: src
+      displayName: Download source artifact
+
+    - task: Bash@3
+      displayName: Push image to ECR
+      env:
+        AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+        AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+        AWS_REGION: $(AWS_REGION)
+      inputs:
+        targetType: inline
+        script: |
+          set -euo pipefail
+
+          if ! command -v aws >/dev/null 2>&1; then
+            echo "Installing AWS CLI..."
+            curl -sSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+            sudo installer -pkg AWSCLIV2.pkg -target /
+          fi
+
+          # Ensure ECR repo exists
+          aws ecr describe-repositories \
+            --repository-names "$(ECR_REPO)" \
+            --region "$(AWS_REGION)" >/dev/null 2>&1 || \
+          aws ecr create-repository \
+            --repository-name "$(ECR_REPO)" \
+            --region "$(AWS_REGION)" >/dev/null
+
+          # Login to ECR
+          aws ecr get-login-password --region "$(AWS_REGION)" \
+            | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
+
+          # Build & push image
+          cd app
+          docker build -t "$(IMAGE_FULL)" .
+          docker push "$(IMAGE_FULL)"
+
+          # Store image reference for deploy stages
+          mkdir -p $(Pipeline.Workspace)/image-ref
+          echo "$(IMAGE_FULL)" > $(Pipeline.Workspace)/image-ref/image.txt
+
+    - task: Bash@3
+      displayName: Cosign sign image
+      inputs:
+        targetType: inline
+        script: |
+          set -euo pipefail
+
+          curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
+          chmod +x cosign
+          sudo mv cosign /usr/local/bin/
+
+          echo "$(COSIGN_PRIVATE_KEY_B64)" | base64 -d > cosign.key
+          echo "$(COSIGN_PUBLIC_KEY_B64)"  | base64 -d > cosign.pub
+
+          COSIGN_PASSWORD="${COSIGN_PASSWORD:-}" cosign sign --key cosign.key "$(IMAGE_FULL)"
+
+    - task: Bash@3
+      displayName: Cosign verify (global gate)
+      inputs:
+        targetType: inline
+        script: |
+          set -euo pipefail
+
+          curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
+          chmod +x cosign
+          sudo mv cosign /usr/local/bin/
+
+          echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
+          cosign verify --key cosign.pub "$(IMAGE_FULL)"
+
+    - task: PublishBuildArtifacts@1
+      displayName: Publish image-ref artifact
+      inputs:
+        pathToPublish: $(Pipeline.Workspace)/image-ref
+        artifactName: image-ref
+
+# =====================================================================
+# STAGE 3: DEPLOY TO DEV
+#   - Runs on:
+#       - PR to main
+#       - push to main
+#   - Has Azure DevOps "Environment: dev" for approvals
+# =====================================================================
 - stage: Deploy_Dev
   displayName: 'Deploy to DEV (namespace: nn-devops-dev)'
   dependsOn: PushAndSign
   condition: succeeded()
   jobs:
-  - template: .azure-pipelines/job-deploy.yml
-    parameters:
-      envName: 'dev'
-      environmentName: 'dev'
-      namespaceVar: '$(NAMESPACE_DEV)'
-      clusterNameVar: '$(CLUSTER_NAME_DEV)'
+  - deployment: deploy_dev
+    displayName: Deploy to dev
+    environment: dev        # Configure approvals on Environment 'dev'
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: image-ref
+            displayName: Download image-ref
 
-# 4) Deploy STAGING (solo main, no PR)
+          - bash: |
+              set -euo pipefail
+              IMAGE="$(cat $(Pipeline.Workspace)/image-ref/image.txt)"
+              echo "IMAGE=${IMAGE}" >> $(Pipeline.Workspace)/image.env
+            displayName: Read image reference
+
+          - bash: |
+              set -euo pipefail
+              source $(Pipeline.Workspace)/image.env
+
+              curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
+              chmod +x cosign
+              sudo mv cosign /usr/local/bin/
+
+              echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
+              cosign verify --key cosign.pub "${IMAGE}"
+            displayName: Verify signature (dev gate)
+
+          - bash: |
+              set -euo pipefail
+              source $(Pipeline.Workspace)/image.env
+
+              CLUSTER_NAME="$(CLUSTER_NAME_DEV)"
+              NAMESPACE="$(NAMESPACE_DEV)"
+
+              if ! command -v aws >/dev/null 2>&1; then
+                echo "Installing AWS CLI..."
+                curl -sSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+                sudo installer -pkg AWSCLIV2.pkg -target /
+              fi
+
+              if ! command -v helm >/dev/null 2>&1; then
+                curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+              fi
+
+              aws eks update-kubeconfig --region "$(AWS_REGION)" --name "${CLUSTER_NAME}"
+
+              kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || \
+                kubectl create namespace "${NAMESPACE}"
+
+              ./scripts/deploy.sh "dev" "${IMAGE}" ./helm "${NAMESPACE}"
+            displayName: Helm deploy to dev
+            env:
+              AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+              AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+              AWS_REGION: $(AWS_REGION)
+
+# =====================================================================
+# STAGE 4: DEPLOY TO STAGING
+#   - Only on push to main (not PR)
+#   - Requires Environment 'staging' approval
+# =====================================================================
 - stage: Deploy_Staging
   displayName: 'Deploy to STAGING (namespace: nn-devops-staging)'
   dependsOn: Deploy_Dev
@@ -83,14 +311,69 @@ stages:
       ne(variables['Build.Reason'], 'PullRequest')
     )
   jobs:
-  - template: .azure-pipelines/job-deploy.yml
-    parameters:
-      envName: 'staging'
-      environmentName: 'staging'
-      namespaceVar: '$(NAMESPACE_STAGING)'
-      clusterNameVar: '$(CLUSTER_NAME_STAGING)'
+  - deployment: deploy_staging
+    displayName: Deploy to staging
+    environment: staging
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: image-ref
+            displayName: Download image-ref
 
-# 5) Deploy PROD (igual que STAGING)
+          - bash: |
+              set -euo pipefail
+              IMAGE="$(cat $(Pipeline.Workspace)/image-ref/image.txt)"
+              echo "IMAGE=${IMAGE}" >> $(Pipeline.Workspace)/image.env
+            displayName: Read image reference
+
+          - bash: |
+              set -euo pipefail
+              source $(Pipeline.Workspace)/image.env
+
+              curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
+              chmod +x cosign
+              sudo mv cosign /usr/local/bin/
+
+              echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
+              cosign verify --key cosign.pub "${IMAGE}"
+            displayName: Verify signature (staging gate)
+
+          - bash: |
+              set -euo pipefail
+              source $(Pipeline.Workspace)/image.env
+
+              CLUSTER_NAME="$(CLUSTER_NAME_STAGING)"
+              NAMESPACE="$(NAMESPACE_STAGING)"
+
+              if ! command -v aws >/dev/null 2>&1; then
+                echo "Installing AWS CLI..."
+                curl -sSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+                sudo installer -pkg AWSCLIV2.pkg -target /
+              fi
+
+              if ! command -v helm >/dev/null 2>&1; then
+                curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+              fi
+
+              aws eks update-kubeconfig --region "$(AWS_REGION)" --name "${CLUSTER_NAME}"
+
+              kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || \
+                kubectl create namespace "${NAMESPACE}"
+
+              ./scripts/deploy.sh "staging" "${IMAGE}" ./helm "${NAMESPACE}"
+            displayName: Helm deploy to staging
+            env:
+              AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+              AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+              AWS_REGION: $(AWS_REGION)
+
+# =====================================================================
+# STAGE 5: DEPLOY TO PROD
+#   - Only on push to main (not PR)
+#   - Requires Environment 'prod' approval
+# =====================================================================
 - stage: Deploy_Prod
   displayName: 'Deploy to PROD (namespace: nn-devops-prod)'
   dependsOn: Deploy_Staging
@@ -101,9 +384,60 @@ stages:
       ne(variables['Build.Reason'], 'PullRequest')
     )
   jobs:
-  - template: .azure-pipelines/job-deploy.yml
-    parameters:
-      envName: 'prod'
-      environmentName: 'prod'
-      namespaceVar: '$(NAMESPACE_PROD)'
-      clusterNameVar: '$(CLUSTER_NAME_PROD)'
+  - deployment: deploy_prod
+    displayName: Deploy to prod
+    environment: prod
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+          - download: current
+            artifact: image-ref
+            displayName: Download image-ref
+
+          - bash: |
+              set -euo pipefail
+              IMAGE="$(cat $(Pipeline.Workspace)/image-ref/image.txt)"
+              echo "IMAGE=${IMAGE}" >> $(Pipeline.Workspace)/image.env
+            displayName: Read image reference
+
+          - bash: |
+              set -euo pipefail
+              source $(Pipeline.Workspace)/image.env
+
+              curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
+              chmod +x cosign
+              sudo mv cosign /usr/local/bin/
+
+              echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
+              cosign verify --key cosign.pub "${IMAGE}"
+            displayName: Verify signature (prod gate)
+
+          - bash: |
+              set -euo pipefail
+              source $(Pipeline.Workspace)/image.env
+
+              CLUSTER_NAME="$(CLUSTER_NAME_PROD)"
+              NAMESPACE="$(NAMESPACE_PROD)"
+
+              if ! command -v aws >/dev/null 2>&1; then
+                echo "Installing AWS CLI..."
+                curl -sSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+                sudo installer -pkg AWSCLIV2.pkg -target /
+              fi
+
+              if ! command -v helm >/dev/null 2>&1; then
+                curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+              fi
+
+              aws eks update-kubeconfig --region "$(AWS_REGION)" --name "${CLUSTER_NAME}"
+
+              kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || \
+                kubectl create namespace "${NAMESPACE}"
+
+              ./scripts/deploy.sh "prod" "${IMAGE}" ./helm "${NAMESPACE}"
+            displayName: Helm deploy to prod
+            env:
+              AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+              AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+              AWS_REGION: $(AWS_REGION)
