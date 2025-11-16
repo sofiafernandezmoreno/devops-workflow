@@ -1,0 +1,94 @@
+trigger:
+  branches:
+    include:
+      - '*'
+    exclude:
+      - main          
+
+pr:
+- main                
+
+variables:
+  IMAGE_NAME: 'nn-devops-challenge'
+  IMAGE_TAG: '$(Build.BuildNumber)'
+  ECR_REPO: 'nn-devops-challenge'
+
+  CONTAINER_REGISTRY: '$(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com'
+  IMAGE_FULL: '$(CONTAINER_REGISTRY)/$(ECR_REPO):$(IMAGE_TAG)'
+
+  CLUSTER_NAME_DEV: 'nn-devops-challenge-cluster'
+  CLUSTER_NAME_STAGING: 'nn-devops-challenge-cluster'
+  CLUSTER_NAME_PROD: 'nn-devops-challenge-cluster'
+
+  NAMESPACE_DEV: 'nn-devops-dev'
+  NAMESPACE_STAGING: 'nn-devops-staging'
+  NAMESPACE_PROD: 'nn-devops-prod'
+
+  RUN_RENOVATE: 'false'
+
+stages:
+  # ===========================
+  # STAGE 0 — RENOVATE
+  # ===========================
+  - stage: Renovate
+    displayName: Renovate Dependencies
+    condition: or(eq(variables['Build.Reason'], 'Schedule'), eq(variables['RUN_RENOVATE'], 'true'))
+    jobs:
+    - job: renovate
+      pool:
+        name: 'sofia-self-hosted'
+      steps:
+      - checkout: self
+      - bash: |
+          set -euo pipefail
+          echo "Running Renovate..."
+          docker run --rm \
+            -e RENOVATE_TOKEN=$(RENOVATE_TOKEN) \
+            -e RENOVATE_PLATFORM=azure \
+            -e RENOVATE_ENDPOINT=https://dev.azure.com \
+            ghcr.io/renovatebot/renovate:latest \
+            "$(System.CollectionUri)$(System.TeamProject)/_git/$(Build.Repository.Name)"
+        env:
+          RENOVATE_TOKEN: $(RENOVATE_TOKEN)
+
+  # 1) Build + tests + Trivy
+  - template: .azure-pipelines/stages-build-test-scan.yml
+
+  # 2) Push a ECR + Cosign 
+  - template: .azure-pipelines/stages-push-and-sign.yml
+
+  # 3) Deploy DEV
+  - template: .azure-pipelines/stages-deploy.yml
+    parameters:
+      stageName: 'Deploy_Dev'
+      displayName: 'Deploy to DEV (namespace: nn-devops-dev)'
+      envName: 'dev'
+      environmentName: 'dev'
+      namespaceVar: '$(NAMESPACE_DEV)'
+      clusterNameVar: '$(CLUSTER_NAME_DEV)'
+      dependsOnStage: 'PushAndSign'
+      extraCondition: "or(startsWith(variables['Build.SourceBranch'], 'refs/pull/'), eq(variables['Build.SourceBranch'], 'refs/heads/main'))"
+
+  # 4) Deploy STAGING
+  - template: .azure-pipelines/stages-deploy.yml
+    parameters:
+      stageName: 'Deploy_Staging'
+      displayName: 'Deploy to STAGING (namespace: nn-devops-staging)'
+      envName: 'staging'
+      environmentName: 'staging'
+      namespaceVar: '$(NAMESPACE_STAGING)'
+      clusterNameVar: '$(CLUSTER_NAME_STAGING)'
+      dependsOnStage: 'Deploy_Dev'
+      extraCondition: "and(eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))"
+
+  # 5) Deploy PROD
+  - template: .azure-pipelines/stages-deploy.yml
+    parameters:
+      stageName: 'Deploy_Prod'
+      displayName: 'Deploy to PROD (namespace: nn-devops-prod)'
+      envName: 'prod'
+      environmentName: 'prod'
+      namespaceVar: '$(NAMESPACE_PROD)'
+      clusterNameVar: '$(CLUSTER_NAME_PROD)'
+      dependsOnStage: 'Deploy_Staging'
+      extraCondition: "and(eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))"
