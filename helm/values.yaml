@@ -1,11 +1,7 @@
 image:
-  repository: dummy/nn-devops-challenge
-  tag: latest
   pullPolicy: IfNotPresent
 
 service:
   type: ClusterIP
   port: 8080
 
-app:
-  environment: dev
