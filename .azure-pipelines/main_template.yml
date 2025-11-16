@@ -28,7 +28,7 @@ stages:
     displayName: "Build + Tests + Trivy Scan"
     condition: succeeded()
     jobs: 
-      - template: .azure-pipelines/job_templates/job-build-test-scan.yml
+      - template: ./job_templates/job-build-test-scan.yml
 
   # 2) Push a ECR + Cosign 
   - stage: PushAndSign
@@ -36,10 +36,10 @@ stages:
     condition: succeeded()
     dependsOn: Build_Test_Scan
     jobs:
-      - template: .azure-pipelines/job_templates/job-push-and-sign.yml
+      - template: ./job_templates/job-push-and-sign.yml
 
   # 3) Deploy DEV
-  - template: .azure-pipelines/job_templates/job-deploy.yml
+  - template: ./job_templates/job-deploy.yml
     parameters:
       stageName: 'Deploy_Dev'
       displayName: 'Deploy to DEV (namespace: nn-devops-dev)'
@@ -51,7 +51,7 @@ stages:
       extraCondition: "or(startsWith(variables['Build.SourceBranch'], 'refs/pull/'), eq(variables['Build.SourceBranch'], 'refs/heads/main'))"
 
   # 4) Deploy STAGING
-  - template: .azure-pipelines/job_templates/job-deploy.yml
+  - template: ./job_templates/job-deploy.yml
     parameters:
       stageName: 'Deploy_Staging'
       displayName: 'Deploy to STAGING (namespace: nn-devops-staging)'
@@ -63,7 +63,7 @@ stages:
       extraCondition: "and(eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))"
 
   # 5) Deploy PROD
-  - template: .azure-pipelines/job_templates/job-deploy.yml
+  - template: ./job_templates/job-deploy.yml
     parameters:
       stageName: 'Deploy_Prod'
       displayName: 'Deploy to PROD (namespace: nn-devops-prod)'
