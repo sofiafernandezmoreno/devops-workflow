@@ -154,6 +154,9 @@ push: login-ecr ## Push to ECR
 # ---------------------------------------------------------
 # COSIGN
 # ---------------------------------------------------------
+print-cosign-env: ## Debug: print COSIGN_PASSWORD from make
+	@echo "COSIGN_PASSWORD='$(COSIGN_PASSWORD)'"
+
 
 cosign-install: ## Install cosign
 	command -v cosign >/dev/null 2>&1 || ( \
