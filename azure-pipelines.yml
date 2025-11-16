@@ -66,11 +66,12 @@ stages:
       env:
         RENOVATE_TOKEN: $(RENOVATE_TOKEN)
 
-# =====================================================================
-# STAGE 1: BUILD + TEST + TRIVY (always)
-# =====================================================================
+# =========================================================
+# STAGE 1 — BUILD + TEST + TRIVY (siempre)
+# =========================================================
 - stage: BuildTestScan
   displayName: Build, Test & Security Scan
+  condition: ne(variables['Build.Reason'], 'Schedule')
   jobs:
   - job: build_test_scan
     displayName: Build + Tests + Trivy
@@ -103,32 +104,29 @@ stages:
         targetType: inline
         script: |
           set -euo pipefail
-
+          # instala en $HOME/.local/bin para evitar sudo
           mkdir -p "$HOME/.local/bin"
           export PATH="$HOME/.local/bin:$PATH"
 
           if ! command -v trivy >/dev/null 2>&1; then
-            echo "Installing Trivy into \$HOME/.local/bin..."
+            echo "Installing Trivy locally..."
             curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
               | sh -s -- -b "$HOME/.local/bin"
           fi
 
-          echo "Trivy version:"
           trivy --version
-
-          echo "Running Trivy scan on image: $(IMAGE_FULL)"
           trivy image --severity CRITICAL --exit-code 1 --no-progress "$(IMAGE_FULL)"
 
     - publish: $(Build.SourcesDirectory)
       artifact: src
       displayName: Publish source artifact
 
-# =====================================================================
-# STAGE 2: PUSH TO ECR + COSIGN
-#   - Runs on:
-#       - PR to main
-#       - push to main
-# =====================================================================
+# =========================================================
+# STAGE 2 — PUSH TO ECR + COSIGN
+#   - Se ejecuta en:
+#       * PR hacia main (refs/pull/...)
+#       * builds en main (refs/heads/main)
+# =========================================================
 - stage: PushAndSign
   displayName: Push to ECR & Cosign
   dependsOn: BuildTestScan
@@ -136,7 +134,7 @@ stages:
     and(
       succeeded(),
       or(
-        eq(variables['Build.Reason'], 'PullRequest'),
+        startsWith(variables['Build.SourceBranch'], 'refs/pull/'),
         eq(variables['Build.SourceBranch'], 'refs/heads/main')
       )
     )
@@ -146,8 +144,6 @@ stages:
     pool:
       name: 'sofia-self-hosted'
     steps:
-    - checkout: self
-
     - download: current
       artifact: src
       displayName: Download source artifact
@@ -169,7 +165,6 @@ stages:
             sudo installer -pkg AWSCLIV2.pkg -target /
           fi
 
-          # Ensure ECR repo exists
           aws ecr describe-repositories \
             --repository-names "$(ECR_REPO)" \
             --region "$(AWS_REGION)" >/dev/null 2>&1 || \
@@ -177,16 +172,14 @@ stages:
             --repository-name "$(ECR_REPO)" \
             --region "$(AWS_REGION)" >/dev/null
 
-          # Login to ECR
           aws ecr get-login-password --region "$(AWS_REGION)" \
             | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
 
-          # Build & push image
           cd app
           docker build -t "$(IMAGE_FULL)" .
+
           docker push "$(IMAGE_FULL)"
 
-          # Store image reference for deploy stages
           mkdir -p $(Pipeline.Workspace)/image-ref
           echo "$(IMAGE_FULL)" > $(Pipeline.Workspace)/image-ref/image.txt
 
@@ -226,21 +219,26 @@ stages:
         pathToPublish: $(Pipeline.Workspace)/image-ref
         artifactName: image-ref
 
-# =====================================================================
-# STAGE 3: DEPLOY TO DEV
-#   - Runs on:
-#       - PR to main
-#       - push to main
-#   - Has Azure DevOps "Environment: dev" for approvals
-# =====================================================================
+# =========================================================
+# STAGE 3 — DEPLOY DEV
+#   - Igual condición que PushAndSign (PR + main)
+#   - Con approval configurado en Environment "dev"
+# =========================================================
 - stage: Deploy_Dev
-  displayName: 'Deploy to DEV (namespace: nn-devops-dev)'
+  displayName: Deploy to DEV (namespace: nn-devops-dev)
   dependsOn: PushAndSign
-  condition: succeeded()
+  condition: >
+    and(
+      succeeded(),
+      or(
+        startsWith(variables['Build.SourceBranch'], 'refs/pull/'),
+        eq(variables['Build.SourceBranch'], 'refs/heads/main')
+      )
+    )
   jobs:
   - deployment: deploy_dev
-    displayName: Deploy to dev
-    environment: dev        # Configure approvals on Environment 'dev'
+    displayName: Deploy to DEV
+    environment: 'dev'
     strategy:
       runOnce:
         deploy:
@@ -265,7 +263,7 @@ stages:
 
               echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
               cosign verify --key cosign.pub "${IMAGE}"
-            displayName: Verify signature (dev gate)
+            displayName: Verify signature (DEV gate)
 
           - bash: |
               set -euo pipefail
@@ -289,20 +287,19 @@ stages:
               kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || \
                 kubectl create namespace "${NAMESPACE}"
 
-              ./scripts/deploy.sh "dev" "${IMAGE}" ./helm "${NAMESPACE}"
-            displayName: Helm deploy to dev
+              ./scripts/deploy.sh dev "${IMAGE}" ./helm "${NAMESPACE}"
+            displayName: Helm deploy to DEV
             env:
               AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
               AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
               AWS_REGION: $(AWS_REGION)
 
-# =====================================================================
-# STAGE 4: DEPLOY TO STAGING
-#   - Only on push to main (not PR)
-#   - Requires Environment 'staging' approval
-# =====================================================================
+# =========================================================
+# STAGE 4 — DEPLOY STAGING
+#   - Solo cuando la rama es main (no en PR)
+# =========================================================
 - stage: Deploy_Staging
-  displayName: 'Deploy to STAGING (namespace: nn-devops-staging)'
+  displayName: Deploy to STAGING (namespace: nn-devops-staging)
   dependsOn: Deploy_Dev
   condition: >
     and(
@@ -312,8 +309,8 @@ stages:
     )
   jobs:
   - deployment: deploy_staging
-    displayName: Deploy to staging
-    environment: staging
+    displayName: Deploy to STAGING
+    environment: 'staging'
     strategy:
       runOnce:
         deploy:
@@ -338,7 +335,7 @@ stages:
 
               echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
               cosign verify --key cosign.pub "${IMAGE}"
-            displayName: Verify signature (staging gate)
+            displayName: Verify signature (STAGING gate)
 
           - bash: |
               set -euo pipefail
@@ -362,20 +359,19 @@ stages:
               kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || \
                 kubectl create namespace "${NAMESPACE}"
 
-              ./scripts/deploy.sh "staging" "${IMAGE}" ./helm "${NAMESPACE}"
-            displayName: Helm deploy to staging
+              ./scripts/deploy.sh staging "${IMAGE}" ./helm "${NAMESPACE}"
+            displayName: Helm deploy to STAGING
             env:
               AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
               AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
               AWS_REGION: $(AWS_REGION)
 
-# =====================================================================
-# STAGE 5: DEPLOY TO PROD
-#   - Only on push to main (not PR)
-#   - Requires Environment 'prod' approval
-# =====================================================================
+# =========================================================
+# STAGE 5 — DEPLOY PROD
+#   - Igual condición que STAGING
+# =========================================================
 - stage: Deploy_Prod
-  displayName: 'Deploy to PROD (namespace: nn-devops-prod)'
+  displayName: Deploy to PROD (namespace: nn-devops-prod)
   dependsOn: Deploy_Staging
   condition: >
     and(
@@ -385,8 +381,8 @@ stages:
     )
   jobs:
   - deployment: deploy_prod
-    displayName: Deploy to prod
-    environment: prod
+    displayName: Deploy to PROD
+    environment: 'prod'
     strategy:
       runOnce:
         deploy:
@@ -411,7 +407,7 @@ stages:
 
               echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
               cosign verify --key cosign.pub "${IMAGE}"
-            displayName: Verify signature (prod gate)
+            displayName: Verify signature (PROD gate)
 
           - bash: |
               set -euo pipefail
@@ -435,8 +431,8 @@ stages:
               kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || \
                 kubectl create namespace "${NAMESPACE}"
 
-              ./scripts/deploy.sh "prod" "${IMAGE}" ./helm "${NAMESPACE}"
-            displayName: Helm deploy to prod
+              ./scripts/deploy.sh prod "${IMAGE}" ./helm "${NAMESPACE}"
+            displayName: Helm deploy to PROD
             env:
               AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
               AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
