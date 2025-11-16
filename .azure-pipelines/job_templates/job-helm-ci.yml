@@ -3,7 +3,7 @@ jobs:
 - job: helm_ci
   displayName: "Helm lint & snapshot tests"
   pool:
-    vmImage: 'ubuntu-latest'
+    name: 'sofia-self-hosted'
 
   variables:
     APP_NAME: 'nn-devops-challenge'
