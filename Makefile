@@ -32,7 +32,7 @@ AWS_PROFILE   ?= terraform-nn-devops
 TF_VARS_FILE  := $(TERRAFORM_DIR)/envs/$(ENV)/terraform.tfvars
 
 # Helm / deploy
-CHART_PATH    ?= helm/
+CHART_PATH    ?= helm
 DEPLOY_SCRIPT ?= scripts/deploy.sh
 
 # Helm chartsnap (snapshot testing)
