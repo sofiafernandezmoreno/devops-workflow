@@ -61,8 +61,7 @@ jobs:
         echo "$(IMAGE_FULL)" > $(Pipeline.Workspace)/image-ref/image-tag.txt
         echo "${IMAGE_DIGEST_REF}" > $(Pipeline.Workspace)/image-ref/image-digest.txt
 
-        echo "Logging out from ECR..."
-        docker logout "$(CONTAINER_REGISTRY)" || true
+        echo "Docker login will be reused by Cosign steps."
 
   # ----------------------------------------------------
   # COSIGN SIGN (BY DIGEST, KEY SIN PASSWORD)
@@ -84,7 +83,7 @@ jobs:
 
         echo "Reading image digest reference from artifact..."
         IMAGE_DIGEST_REF="$(cat $(Pipeline.Workspace)/image-ref/image-digest.txt)"
-        echo "Image digest to sign: ${IMAGE_DIGEST_REF}"
+        echo "Image digest to sign: ${IMAGE_DIGESTREF}"
 
         echo "Signing image with Cosign (by digest, key without password)..."
         ./cosign sign --key cosign.key "${IMAGE_DIGEST_REF}"
@@ -112,6 +111,9 @@ jobs:
 
         echo "Verifying image signature with Cosign (by digest)..."
         ./cosign verify --key cosign.pub "${IMAGE_DIGEST_REF}"
+
+        echo "Logging out from ECR at the end of pipeline..."
+        docker logout "$(CONTAINER_REGISTRY)" || true
 
   # ----------------------------------------------------
   # PUBLISH IMAGE REFERENCE ARTIFACT
