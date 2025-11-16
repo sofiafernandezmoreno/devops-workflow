@@ -1,29 +1,40 @@
 # .azure-pipelines/job_templates/job-renovate.yml
-parameters: {}
+parameters:
+  poolName: 'sofia-self-hosted'
+  azureEndpoint: 'https://dev.azure.com/sofia-nn-challenge'
+  azureRepo: 'nn-devops-challenge/nn-devops-challenge' # project/repository
 
 jobs:
 - job: renovate
-  displayName: Run Renovate
+  displayName: Run Renovate Bot
   pool:
-    name: 'sofia-self-hosted'
+    name: ${{ parameters.poolName }}
+
   steps:
-  - checkout: self
+    - checkout: self
+      clean: true
 
-  - task: Bash@3
-    displayName: Run Renovate
-    inputs:
-      targetType: inline
-      script: |
-        set -euo pipefail
+    - task: Bash@3
+      displayName: Run Renovate (Docker)
+      env:
+        RENOVATE_TOKEN: $(RENOVATE_TOKEN)       
+        RENOVATE_PLATFORM: 'azure'
+        RENOVATE_ENDPOINT: ${{ parameters.azureEndpoint }}
+        LOG_LEVEL: 'info'
+        RENOVATE_REPOSITORIES: ${{ parameters.azureRepo }}
+      inputs:
+        targetType: inline
+        script: |
+          set -euo pipefail
 
-        echo "Running Renovate for repo: $(Build.Repository.Uri)"
+          echo "Running Renovate for $RENOVATE_REPOSITORIES against $RENOVATE_ENDPOINT"
 
-        docker run --rm \
-          -e RENOVATE_TOKEN=$(RENOVATE_TOKEN) \
-          -e RENOVATE_PLATFORM=azure \
-          -e RENOVATE_ENDPOINT=https://dev.azure.com \
-          -e LOG_LEVEL=info \
-          ghcr.io/renovatebot/renovate:latest \
-          "$(System.CollectionUri)$(System.TeamProject)/_git/$(Build.Repository.Name)"
-    env:
-      RENOVATE_TOKEN: $(RENOVATE_TOKEN)
+          docker run --rm \
+            -e RENOVATE_TOKEN \
+            -e RENOVATE_PLATFORM \
+            -e RENOVATE_ENDPOINT \
+            -e LOG_LEVEL \
+            -e RENOVATE_REPOSITORIES \
+            -v "$(System.DefaultWorkingDirectory)":/repo \
+            -w /repo \
+            renovate/renovate

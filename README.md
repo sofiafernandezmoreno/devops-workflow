@@ -288,6 +288,56 @@ pool:
   name: 'sofia-self-hosted'
 ```
 
+## 🔄 Automated Dependency Management – Renovate (not for this challenge)
+
+To keep the stack secure and reduce manual maintenance, this repository uses [Renovate Bot](https://docs.renovatebot.com/) to automatically detect and propose dependency updates.
+
+### What Renovate manages
+
+The `renovate.json` configuration in the repository root enables Renovate to manage:
+
+- **Terraform modules** (EKS, VPC, IAM, etc.)
+- **Helm charts and values** for the application deployment
+- **Java dependencies** (Spring Boot, libraries defined in `pom.xml`)
+- **Docker base images** used in the `Dockerfile`
+- **Container images referenced in CI/CD YAML** (e.g. Trivy, Helm, kubectl in `azure-pipelines.yml`)
+- **CLI tooling installed from GitHub releases** (cosign, trivy, helm, kubectl)
+
+Dependencies are grouped into logical PRs (Terraform, Helm, Java, Docker, CLI tools) to keep reviews focused and readable.
+
+### How Renovate runs
+
+Renovate is executed as a separate Azure DevOps job using the official `renovate/renovate` Docker image:
+
+- A dedicated pipeline stage (`renovate`) runs on a **self-hosted Linux agent**.
+- The job is triggered on a **schedule** (e.g. before 04:00 every Monday, Europe/Madrid).
+- Authentication is done via an Azure DevOps Personal Access Token (PAT) stored as a secure variable `RENOVATE_TOKEN`.
+- Renovate connects to the Azure DevOps API (`platform=azure`) and scans this repository according to `renovate.json`.
+- For each update, Renovate opens **Pull Requests** against the `main` branch.
+
+Every Renovate PR automatically triggers the **same CI/CD pipeline** as regular changes:
+
+1. Build & unit tests
+2. Trivy image scan
+3. Cosign signing
+4. Push to ECR
+5. Optional Helm deploy to EKS (dev/staging/prod based on environment)
+
+This ensures that **all dependency updates go through the full build, security scan and deployment process** before being merged.
+
+### Why Renovate is used in this challenge
+
+Although the original NN DevOps Challenge only requires deploying a sample application, adding Renovate demonstrates:
+
+- **Production-grade maintenance practices** (automated dependency management)
+- **Security by design**, keeping images and libraries up to date
+- **Clear separation of concerns** between feature development and dependency updates
+- **GitOps-friendly workflow**, where all changes (including version bumps) are traceable via Pull Requests
+
+In a real-world scenario, this significantly reduces toil for the DevOps team and helps keep the AWS, Kubernetes and Spring Boot stack secure over time.
+
+
+
 ## Useful links
 
 * [Azure DevOps Pipelines Documentation](https://learn.microsoft.com/es-es/azure/devops/pipelines/?view=azure-devops)

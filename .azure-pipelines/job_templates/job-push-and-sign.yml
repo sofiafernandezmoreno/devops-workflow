@@ -23,6 +23,7 @@ jobs:
       AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
       AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
       AWS_REGION: $(AWS_REGION)
+      DOCKER_DEFAULT_PLATFORM: linux/amd64   
     inputs:
       targetType: inline
       script: |
@@ -40,7 +41,7 @@ jobs:
         aws ecr get-login-password --region "$(AWS_REGION)" \
           | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
 
-        echo "Building image: $(IMAGE_FULL)"
+        echo "Building image (platform: $DOCKER_DEFAULT_PLATFORM): $(IMAGE_FULL)"
         cd app
         docker build -t "$(IMAGE_FULL)" .
 

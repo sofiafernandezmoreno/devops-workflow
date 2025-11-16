@@ -1,26 +1,124 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:base", ":semanticCommits"],
-  "enabledManagers": ["maven", "dockerfile", "helm-values", "azure-pipelines"],
+
+  "extends": [
+    "config:recommended",
+    ":semanticCommits",
+    ":prHourlyLimitNone",
+    ":prConcurrentLimit10"
+  ],
+
+  "onboarding": true,
+  "onboardingConfigFileName": "renovate.json",
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "Renovate Dependency Dashboard",
+
+  "platform": "azure",
+  "username": "renovate-bot",
+  "gitAuthor": "Renovate Bot <renovate-bot@example.com>",
   "timezone": "Europe/Madrid",
-  "labels": ["renovate", "dependencies"],
+
+  "labels": [
+    "dependencies",
+    "renovate"
+  ],
+
+  "automerge": false,
+  "prCreation": "not-pending",
+  "rangeStrategy": "bump",
+
+  "semanticCommits": "enabled",
+  "semanticCommitType": "chore",
+  "semanticCommitScope": "deps",
+
+  "enabledManagers": [
+    "dockerfile",
+    "helm-values",
+    "helm-requirements",
+    "terraform",
+    "maven",
+    "gradle"
+  ],
+
+  "regexManagers": [
+    {
+      "description": "Update Docker images referenced in Azure Pipelines YAML (e.g. Trivy, Cosign, Helm, kubectl)",
+      "fileMatch": [
+        "azure-pipelines\\.ya?ml$",
+        "\\.ya?ml$"
+      ],
+      "matchStrings": [
+        "image:\\s*(?<depName>[^:@\\s]+)(:(?<currentValue>[a-zA-Z0-9_.-]+))?"
+      ],
+      "datasourceTemplate": "docker",
+      "versioningTemplate": "docker",
+      "extractVersionTemplate": "^(?<version>.*)$"
+    }
+  ],
+
   "packageRules": [
     {
-      "matchManagers": ["maven"],
-      "groupName": "Maven dependencies (weekly batch)",
-      "schedule": ["before 6am on sunday"]
+      "description": "Group Terraform module updates together",
+      "matchManagers": [
+        "terraform"
+      ],
+      "groupName": "terraform modules"
     },
     {
-      "matchManagers": ["dockerfile"],
-      "groupName": "Docker base images"
+      "description": "Group Helm chart updates",
+      "matchManagers": [
+        "helm-values",
+        "helm-requirements"
+      ],
+      "groupName": "helm charts"
     },
     {
-      "matchManagers": ["helm-values"],
-      "groupName": "Helm charts/values"
+      "description": "Group Java dependency updates",
+      "matchManagers": [
+        "maven",
+        "gradle"
+      ],
+      "groupName": "java dependencies"
     },
     {
-      "matchManagers": ["azure-pipelines"],
-      "groupName": "Azure Pipelines tasks"
+      "description": "Group Docker base image updates",
+      "matchManagers": [
+        "dockerfile"
+      ],
+      "groupName": "docker base images"
+    },
+    {
+      "description": "CLI tools installed from GitHub releases (cosign, trivy, helm, kubectl...)",
+      "matchDatasources": [
+        "github-releases"
+      ],
+      "matchPackagePatterns": [
+        "cosign",
+        "trivy",
+        "helm",
+        "kubectl"
+      ],
+      "groupName": "cli tools"
+    },
+    {
+      "description": "Never automerge anything (extra safety)",
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "patch"
+      ],
+      "automerge": false
+    },
+    {
+      "description": "More conservative for major updates",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "prPriority": -1
     }
+  ],
+
+  "schedule": [
+    "before 4am on monday"
   ]
 }

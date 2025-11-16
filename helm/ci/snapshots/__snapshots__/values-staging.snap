@@ -32,10 +32,10 @@ spec:
     spec:
       containers:
       - name: app
-        image: "dummy/nn-devops-challenge:latest"
+        image: "541872890146.dkr.ecr.eu-west-1.amazonaws.com/nn-devops-challenge:snapshot"
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 8080
         env:
         - name: SPRING_PROFILES_ACTIVE
-          value: "dev"
+          value: "staging"

@@ -1,10 +1,12 @@
 image:
   pullPolicy: IfNotPresent
 
-app:
-  environment: dev 
-  
 service:
   type: ClusterIP
   port: 8080
 
+app:
+  environment: staging
+
+env:
+  SPRING_PROFILES_ACTIVE: staging

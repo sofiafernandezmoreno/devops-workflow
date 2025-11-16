@@ -1,6 +1,4 @@
 image:
-  repository: dummy/nn-devops-challenge
-  tag: 1.0.0
   pullPolicy: IfNotPresent
 
 service:
@@ -9,3 +7,6 @@ service:
 
 app:
   environment: prod
+
+env:
+  SPRING_PROFILES_ACTIVE: prod
