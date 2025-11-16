@@ -15,51 +15,73 @@ jobs:
         steps:
         - download: current
           artifact: image-ref
-          displayName: Download image-ref
+          displayName: Download image-ref artifact
 
-        - bash: |
-            set -euo pipefail
-            IMAGE="$(cat $(Pipeline.Workspace)/image-ref/image.txt)"
-            echo "IMAGE=${IMAGE}" >> $(Pipeline.Workspace)/image.env
-          displayName: Read image reference
-
-        - bash: |
-            set -euo pipefail
-            source $(Pipeline.Workspace)/image.env
-
-            curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
-            chmod +x cosign
-            sudo mv cosign /usr/local/bin/
-
-            echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
-            cosign verify --key cosign.pub "${IMAGE}"
-          displayName: Verify signature (${{ parameters.envName }} gate)
-
-        - bash: |
-            set -euo pipefail
-            source $(Pipeline.Workspace)/image.env
-
-            CLUSTER_NAME="${{ parameters.clusterNameVar }}"
-            NAMESPACE="${{ parameters.namespaceVar }}"
-
-            if ! command -v aws >/dev/null 2>&1; then
-              echo "Installing AWS CLI..."
-              curl -sSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
-              sudo installer -pkg AWSCLIV2.pkg -target /
-            fi
-
-            if ! command -v helm >/dev/null 2>&1; then
-              curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
-            fi
-
-            aws eks update-kubeconfig --region "$(AWS_REGION)" --name "${CLUSTER_NAME}"
-
-            kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || \
-              kubectl create namespace "${NAMESPACE}"
-
-            ./scripts/deploy.sh "${{ parameters.envName }}" "${IMAGE}" ./helm "${NAMESPACE}"
+        - task: Bash@3
           displayName: Helm deploy to ${{ parameters.envName }}
           env:
             AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
             AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
             AWS_REGION: $(AWS_REGION)
+            COSIGN_PUBLIC_KEY_B64: $(COSIGN_PUBLIC_KEY_B64)
+          inputs:
+            targetType: inline
+            script: |
+              set -euo pipefail
+
+              # Read image references from artifact
+              IMAGE_TAG_REF="$(cat $(Pipeline.Workspace)/image-ref/image-tag.txt)"
+              IMAGE_DIGEST_REF="$(cat $(Pipeline.Workspace)/image-ref/image-digest.txt)"
+
+              NAMESPACE="${{ parameters.namespaceVar }}"
+              CLUSTER_NAME="${{ parameters.clusterNameVar }}"
+
+              echo "Using namespace: ${NAMESPACE}"
+              echo "Using cluster: ${CLUSTER_NAME}"
+              echo "Image (tag): ${IMAGE_TAG_REF}"
+              echo "Image (digest): ${IMAGE_DIGEST_REF}"
+
+              # Install AWS CLI if not present
+              if ! command -v aws >/dev/null 2>&1; then
+                echo "Installing AWS CLI..."
+                curl -sSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+                sudo installer -pkg AWSCLIV2.pkg -target /
+              fi
+
+              # Install kubectl if not present
+              if ! command -v kubectl >/dev/null 2>&1; then
+                echo "Installing kubectl..."
+                KUBECTL_VERSION="$(curl -L -s https://dl.k8s.io/release/stable.txt)"
+                curl -LO "https://dl.k8s.io/release/${KUBECTL_VERSION}/bin/darwin/arm64/kubectl"
+                chmod +x kubectl
+                sudo mv kubectl /usr/local/bin/
+              fi
+
+              # Install Helm if not present
+              if ! command -v helm >/dev/null 2>&1; then
+                echo "Installing Helm..."
+                curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+              fi
+
+              # Install Cosign
+              if ! command -v cosign >/dev/null 2>&1; then
+                echo "Installing Cosign..."
+                curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
+                chmod +x cosign
+                sudo mv cosign /usr/local/bin/
+              fi
+
+              echo "Decoding Cosign public key..."
+              echo "$COSIGN_PUBLIC_KEY_B64" | base64 -d > cosign.pub
+
+              echo "Verifying image signature with Cosign (by digest) before deploy..."
+              cosign verify --key cosign.pub "${IMAGE_DIGEST_REF}"
+
+              echo "Updating kubeconfig for cluster ${CLUSTER_NAME}..."
+              aws eks update-kubeconfig --region "$(AWS_REGION)" --name "${CLUSTER_NAME}"
+
+              kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || \
+                kubectl create namespace "${NAMESPACE}"
+
+              echo "Deploying with Helm using image (tag): ${IMAGE_TAG_REF}"
+              ./scripts/deploy.sh "${{ parameters.envName }}" "${IMAGE_TAG_REF}" ./helm "${NAMESPACE}"

@@ -54,18 +54,28 @@ jobs:
         echo "Pushing image to ECR..."
         docker push "$(IMAGE_FULL)"
 
-        echo "Storing pushed image reference..."
+        echo "Resolving image digest from ECR..."
+        IMAGE_DIGEST=$(aws ecr describe-images \
+          --repository-name "$(ECR_REPO)" \
+          --image-ids imageTag="$(IMAGE_TAG)" \
+          --query 'imageDetails[0].imageDigest' \
+          --output text)
+
+        IMAGE_DIGEST_REF="$(CONTAINER_REGISTRY)/$(ECR_REPO)@${IMAGE_DIGEST}"
+
+        echo "Storing image references..."
         mkdir -p $(Pipeline.Workspace)/image-ref
-        echo "$(IMAGE_FULL)" > $(Pipeline.Workspace)/image-ref/image.txt
+        echo "$(IMAGE_FULL)" > $(Pipeline.Workspace)/image-ref/image-tag.txt
+        echo "${IMAGE_DIGEST_REF}" > $(Pipeline.Workspace)/image-ref/image-digest.txt
 
         echo "Logging out from ECR..."
         docker logout "$(CONTAINER_REGISTRY)" || true
 
   # ----------------------------------------------------
-  # COSIGN SIGN
+  # COSIGN SIGN (BY DIGEST)
   # ----------------------------------------------------
   - task: Bash@3
-    displayName: Cosign sign image
+    displayName: Cosign sign image (by digest)
     env:
       AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
       AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
@@ -84,18 +94,31 @@ jobs:
         echo "$(COSIGN_PRIVATE_KEY_B64)" | base64 -d > cosign.key
         echo "$(COSIGN_PUBLIC_KEY_B64)"  | base64 -d > cosign.pub
 
-        echo "Logging into ECR again before signing..."
+        echo "Logging into ECR before signing..."
         aws ecr get-login-password --region "$(AWS_REGION)" \
           | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
 
-        echo "Signing image with Cosign..."
-        COSIGN_PASSWORD="${COSIGN_PASSWORD:-}" cosign sign --key cosign.key "$(IMAGE_FULL)"
+        echo "Resolving image digest from ECR..."
+        IMAGE_DIGEST=$(aws ecr describe-images \
+          --repository-name "$(ECR_REPO)" \
+          --image-ids imageTag="$(IMAGE_TAG)" \
+          --query 'imageDetails[0].imageDigest' \
+          --output text)
+
+        IMAGE_DIGEST_REF="$(CONTAINER_REGISTRY)/$(ECR_REPO)@${IMAGE_DIGEST}"
+
+        echo "Signing image with Cosign (by digest)..."
+        COSIGN_PASSWORD="${COSIGN_PASSWORD:-}" cosign sign --key cosign.key "${IMAGE_DIGEST_REF}"
 
   # ----------------------------------------------------
-  # COSIGN VERIFY
+  # COSIGN VERIFY (GLOBAL GATE, BY DIGEST)
   # ----------------------------------------------------
   - task: Bash@3
-    displayName: Cosign verify (global gate)
+    displayName: Cosign verify (global gate, by digest)
+    env:
+      AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+      AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+      AWS_REGION: $(AWS_REGION)
     inputs:
       targetType: inline
       script: |
@@ -109,11 +132,24 @@ jobs:
         echo "Decoding public key..."
         echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
 
-        echo "Verifying image signature..."
-        cosign verify --key cosign.pub "$(IMAGE_FULL)"
+        echo "Logging into ECR before verification..."
+        aws ecr get-login-password --region "$(AWS_REGION)" \
+          | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
+
+        echo "Resolving image digest from ECR..."
+        IMAGE_DIGEST=$(aws ecr describe-images \
+          --repository-name "$(ECR_REPO)" \
+          --image-ids imageTag="$(IMAGE_TAG)" \
+          --query 'imageDetails[0].imageDigest' \
+          --output text)
+
+        IMAGE_DIGEST_REF="$(CONTAINER_REGISTRY)/$(ECR_REPO)@${IMAGE_DIGEST}"
+
+        echo "Verifying image signature with Cosign (by digest)..."
+        cosign verify --key cosign.pub "${IMAGE_DIGEST_REF}"
 
   # ----------------------------------------------------
-  # PUBLISH IMAGE REFERENCE
+  # PUBLISH IMAGE REFERENCE ARTIFACT
   # ----------------------------------------------------
   - task: PublishBuildArtifacts@1
     displayName: Publish image-ref artifact
