@@ -24,6 +24,9 @@ REGISTRY       ?= $(AWS_ACCOUNT_ID).dkr.ecr.$(AWS_REGION).amazonaws.com
 TAG            ?= local
 IMAGE          := $(REGISTRY)/$(APP_NAME):$(TAG)
 
+IMAGE_REPOSITORY ?= $(REGISTRY)/$(APP_NAME)
+IMAGE_TAG        ?= $(TAG)
+
 # Terraform settings
 TERRAFORM_DIR ?= infra
 ENV           ?= dev
@@ -207,15 +210,20 @@ chartsnap-install: ## Install chartsnap
 
 helm-lint: ## Lint Helm chart with all env values
 	@echo "==> helm lint (base chart)"
-	helm lint $(CHART_PATH)
+	helm lint $(CHART_PATH) \
+	  --set image.repository=$(IMAGE_REPOSITORY) \
+	  --set image.tag=$(IMAGE_TAG)
 
 	@echo "==> helm lint with env values from $(CHART_ENVS_DIR)"
 	@for values in $(CHART_ENVS_DIR)/values-*.yaml; do \
 		if [ -f $$values ]; then \
 			echo "  -> helm lint $(CHART_PATH) -f $$values"; \
-			helm lint $(CHART_PATH) -f $$values; \
+			helm lint $(CHART_PATH) -f $$values \
+			  --set image.repository=$(IMAGE_REPOSITORY) \
+			  --set image.tag=$(IMAGE_TAG); \
 		fi; \
 	done
+
 
 chartsnap-snapshot-all: chartsnap-install ## Snapshot all envs (dev/staging/prod)
 	@test -d "$(CHART_ENVS_DIR)" || (echo "Env values dir missing: $(CHART_ENVS_DIR)"; exit 1)
@@ -224,9 +232,13 @@ chartsnap-snapshot-all: chartsnap-install ## Snapshot all envs (dev/staging/prod
 	@for values in $(CHART_ENVS_DIR)/values-*.yaml; do \
 		if [ -f $$values ]; then \
 			echo "  -> $$values"; \
-			helm chartsnap -c $(CHART_PATH) -f $$values -o $(CHART_SNAPSHOT_OUTPUT_DIR); \
+			helm chartsnap -c $(CHART_PATH) -f $$values \
+			  --set image.repository=$(IMAGE_REPOSITORY) \
+			  --set image.tag=$(IMAGE_TAG) \
+			  -o $(CHART_SNAPSHOT_OUTPUT_DIR); \
 		fi; \
 	done
+
 
 chartsnap-update: chartsnap-install ## Update snapshots for all envs
 	@test -d "$(CHART_ENVS_DIR)" || (echo "Env values dir missing: $(CHART_ENVS_DIR)"; exit 1)
