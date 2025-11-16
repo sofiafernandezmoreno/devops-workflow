@@ -1,66 +1,155 @@
-# job-push-and-sign.yml
+# .azure-pipelines/job_templates/job-push-and-sign.yml
+parameters: {}
+
 jobs:
-- job: push_and_sign
-  displayName: Push & Sign Image
+- job: push_sign
+  displayName: Push image to ECR & Cosign
+  pool:
+    name: 'sofia-self-hosted'
 
   steps:
-
-  - checkout: none
+  - checkout: self
 
   - download: current
-    artifact: image-ref
-    displayName: Download build artifacts
+    artifact: src
+    displayName: Download source artifact
 
+  # ----------------------------------------------------
+  # 1) PUSH TO ECR (TAG + DIGEST)
+  # ----------------------------------------------------
   - task: Bash@3
-    displayName: Docker login & push to ECR
+    displayName: Push image to ECR
     env:
       AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
       AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
       AWS_REGION: $(AWS_REGION)
-      IMAGE_FULL: $(IMAGE_FULL)
-      CONTAINER_REGISTRY: $(CONTAINER_REGISTRY)
     inputs:
       targetType: inline
       script: |
         set -euo pipefail
 
-        echo "Logging in to ECR..."
+        echo "Ensuring ECR repository exists..."
+        aws ecr describe-repositories \
+          --repository-names "$(ECR_REPO)" \
+          --region "$(AWS_REGION)" >/dev/null 2>&1 || \
+        aws ecr create-repository \
+          --repository-name "$(ECR_REPO)" \
+          --region "$(AWS_REGION)" >/dev/null
+
+        echo "Logging into ECR..."
         aws ecr get-login-password --region "$(AWS_REGION)" \
           | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
 
-        TAG_REF="$(cat $(Pipeline.Workspace)/image-ref/image-tag.txt)"
-        echo "Pushing ${TAG_REF}"
+        echo "Building image: $(IMAGE_FULL)"
+        cd app
+        docker build -t "$(IMAGE_FULL)" .
 
-        docker push "${TAG_REF}"
+        echo "Pushing image to ECR..."
+        docker push "$(IMAGE_FULL)"
 
+        echo "Resolving image digest from ECR..."
+        IMAGE_DIGEST=$(aws ecr describe-images \
+          --repository-name "$(ECR_REPO)" \
+          --image-ids imageTag="$(IMAGE_TAG)" \
+          --query 'imageDetails[0].imageDigest' \
+          --output text)
+
+        IMAGE_DIGEST_REF="$(CONTAINER_REGISTRY)/$(ECR_REPO)@${IMAGE_DIGEST}"
+
+        echo "Storing image references..."
+        mkdir -p $(Pipeline.Workspace)/image-ref
+        echo "$(IMAGE_FULL)" > $(Pipeline.Workspace)/image-ref/image-tag.txt
+        echo "${IMAGE_DIGEST_REF}" > $(Pipeline.Workspace)/image-ref/image-digest.txt
+
+  # ----------------------------------------------------
+  # 2) COSIGN SIGN (BY DIGEST)
+  # ----------------------------------------------------
   - task: Bash@3
-    displayName: Cosign sign image
+    displayName: Cosign sign image (by digest)
     env:
-      COSIGN_PRIVATE_KEY_B64: $(COSIGN_PRIVATE_KEY_B64)
       AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
       AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
       AWS_REGION: $(AWS_REGION)
-      CONTAINER_REGISTRY: $(CONTAINER_REGISTRY)
+      COSIGN_PASSWORD: $(COSIGN_PASSWORD)
+      COSIGN_DOCKER_MEDIA_TYPES: "1"
     inputs:
       targetType: inline
       script: |
         set -euo pipefail
 
-        echo "Installing Cosign..."
+        echo "Installing Cosign (local)..."
         curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
         chmod +x cosign
 
-        echo "Decoding private key..."
-        echo "$COSIGN_PRIVATE_KEY_B64" | base64 -d > cosign.key
+        echo "Decoding Cosign keys..."
+        echo "$(COSIGN_PRIVATE_KEY_B64)" | base64 -d > cosign.key
+        echo "$(COSIGN_PUBLIC_KEY_B64)"  | base64 -d > cosign.pub
 
+        echo "Reading image digest reference from artifact..."
         IMAGE_DIGEST_REF="$(cat $(Pipeline.Workspace)/image-ref/image-digest.txt)"
-        echo "Signing digest: ${IMAGE_DIGEST_REF}"
+        echo "Image digest to sign: ${IMAGE_DIGEST_REF}"
 
+        echo "Ensuring Docker login to ECR (for Cosign)..."
         aws ecr get-login-password --region "$(AWS_REGION)" \
           | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
 
-        ./cosign sign \
+        echo "Signing image with Cosign (by digest, legacy docker media types)..."
+        ./cosign \
+          -t 60s \
+          sign \
           --key cosign.key \
           --tlog-upload=false \
           --yes \
           "${IMAGE_DIGEST_REF}"
+
+        echo "Done signing image."
+
+
+  # ----------------------------------------------------
+  # 3) COSIGN VERIFY (GLOBAL GATE, BY DIGEST)
+  # ----------------------------------------------------
+  - task: Bash@3
+    displayName: Cosign verify (global gate, by digest)
+    env:
+      AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+      AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+      AWS_REGION: $(AWS_REGION)
+      COSIGN_DOCKER_MEDIA_TYPES: "1"
+    inputs:
+      targetType: inline
+      script: |
+        set -euo pipefail
+
+        echo "Installing Cosign (local)..."
+        curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
+        chmod +x cosign
+
+        echo "Decoding public key..."
+        echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
+
+        echo "Reading image digest from artifact..."
+        IMAGE_DIGEST_REF="$(cat $(Pipeline.Workspace)/image-ref/image-digest.txt)"
+        echo "Image digest to verify: ${IMAGE_DIGEST_REF}"
+
+        echo "Ensuring Docker login to ECR (for Cosign verify)..."
+        aws ecr get-login-password --region "$(AWS_REGION)" \
+          | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
+
+        echo "Verifying image signature with Cosign (by digest, using registry signatures)..."
+        ./cosign \
+          verify \
+          --key cosign.pub \
+          "${IMAGE_DIGEST_REF}"
+
+        echo "Logging out from ECR at the end of pipeline..."
+        docker logout "$(CONTAINER_REGISTRY)" || true
+
+
+  # ----------------------------------------------------
+  # 4) PUBLISH IMAGE REFERENCE ARTIFACT
+  # ----------------------------------------------------
+  - task: PublishBuildArtifacts@1
+    displayName: Publish image-ref artifact
+    inputs:
+      pathToPublish: $(Pipeline.Workspace)/image-ref
+      artifactName: image-ref

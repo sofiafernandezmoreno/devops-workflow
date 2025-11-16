@@ -1,40 +1,34 @@
-# job-build-test-scan.yml
-parameters:
-  imageRepository: ''
-  serviceName: ''
+# .azure-pipelines/job_templates/job-build-test-scan.yml
+parameters: {}
 
 jobs:
 - job: build_test_scan
-  displayName: Build, Test & Scan
-
+  displayName: Build + Tests + Trivy
+  pool:
+    name: 'sofia-self-hosted'
   steps:
-
   - checkout: self
-    displayName: Checkout repository
 
   - task: Bash@3
-    displayName: Set IMAGE_FULL variable
+    displayName: Unit tests (Maven)
     inputs:
       targetType: inline
       script: |
         set -euo pipefail
-        echo "##vso[task.setvariable variable=IMAGE_FULL]${{ parameters.imageRepository }}:${{ format('{0}.{1}', variables['Build.SourceBranchName'], variables['Build.BuildId']) }}"
-        echo "IMAGE_FULL set to: $(IMAGE_FULL)"
+        cd app
+        mvn -q -DskipTests=false test
 
   - task: Bash@3
     displayName: Build Docker image (linux/amd64)
-    env:
-      IMAGE_FULL: $(IMAGE_FULL)
     inputs:
       targetType: inline
       script: |
         set -euo pipefail
         cd app
 
-        echo "Building Docker image for linux/amd64"
-        echo "IMAGE_FULL=${IMAGE_FULL}"
+        echo "Using IMAGE_FULL=${IMAGE_FULL}"
 
-        # Create/Use buildx builder
+        # Crear (si no existe) y usar un builder multi-arch
         if ! docker buildx inspect multiarch-builder >/dev/null 2>&1; then
           echo "Creating buildx builder 'multiarch-builder'..."
           docker buildx create --use --name multiarch-builder
@@ -43,58 +37,41 @@ jobs:
           docker buildx use multiarch-builder
         fi
 
+        echo "Building image for platform linux/amd64..."
         docker buildx build \
           --platform linux/amd64 \
-          --no-cache \
           -t "${IMAGE_FULL}" \
           --load \
           .
 
         echo "Image built: ${IMAGE_FULL}"
-        docker inspect --format='Built Architecture: {{.Architecture}}' "${IMAGE_FULL}"
+
+        echo "Inspecting image architecture..."
+        docker inspect --format='Architecture: {{.Architecture}}' "${IMAGE_FULL}"
+
 
   - task: Bash@3
-    displayName: Run tests
-    inputs:
-      targetType: inline
-      script: |
-        set -e
-        echo "Running tests..."
-        cd app
-        ./mvnw test
-
-  - task: Bash@3
-    displayName: Trivy scan
-    env:
-      IMAGE_FULL: $(IMAGE_FULL)
+    displayName: Trivy scan (fail on CRITICAL)
     inputs:
       targetType: inline
       script: |
         set -euo pipefail
-        echo "Scanning image: ${IMAGE_FULL}"
-        trivy image --exit-code 0 --severity HIGH,CRITICAL "${IMAGE_FULL}"
 
-  - task: Bash@3
-    displayName: Export build artifacts (image tag & digest)
-    env:
-      IMAGE_FULL: $(IMAGE_FULL)
-    inputs:
-      targetType: inline
-      script: |
-        set -euo pipefail
-        echo "Exporting image ref details..."
+        mkdir -p "$HOME/.local/bin"
+        export PATH="$HOME/.local/bin:$PATH"
 
-        mkdir -p "$(Build.ArtifactStagingDirectory)/image-ref"
+        if ! command -v trivy >/dev/null 2>&1; then
+          echo "Installing Trivy into \$HOME/.local/bin..."
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b "$HOME/.local/bin"
+        fi
 
-        echo -n "${IMAGE_FULL}" > "$(Build.ArtifactStagingDirectory)/image-ref/image-tag.txt"
-        echo "Image tag written: ${IMAGE_FULL}"
+        echo "Trivy version:"
+        trivy --version
 
-        docker inspect --format='{{index .RepoDigests 0}}' "${IMAGE_FULL}" > "$(Build.ArtifactStagingDirectory)/image-ref/image-digest.txt"
-        echo "Digest written: $(cat $(Build.ArtifactStagingDirectory)/image-ref/image-digest.txt)"
+        echo "Running Trivy scan on image: $(IMAGE_FULL)"
+        trivy image --severity CRITICAL --exit-code 1 --no-progress "$(IMAGE_FULL)"
 
-  - task: PublishPipelineArtifact@1
-    displayName: Publish image-ref artifact
-    inputs:
-      targetPath: '$(Build.ArtifactStagingDirectory)/image-ref'
-      artifact: image-ref
-      publishLocation: pipeline
+  - publish: $(Build.SourcesDirectory)
+    artifact: src
+    displayName: Publish source artifact
