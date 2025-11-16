@@ -102,9 +102,8 @@ jobs:
           -t 60s \
           sign \
           --key cosign.key \
-          --tlog-upload=false \
+          --upload=true \
           --yes \
-          --output-bundle "$(Pipeline.Workspace)/image-ref/image.bundle" \
           "${IMAGE_DIGEST_REF}"
 
         echo "Done signing image. Bundle stored at $(Pipeline.Workspace)/image-ref/image.bundle"
@@ -147,9 +146,8 @@ jobs:
           -t 60s \
           verify \
           --key cosign.pub \
-          --bundle "${BUNDLE_PATH}" \
           "${IMAGE_DIGEST_REF}"
-
+          
         echo "Global verify OK."
 
   # ----------------------------------------------------
