@@ -286,7 +286,7 @@ The pipeline explicitly targets the self-hosted agent pool:
 ```yaml
 pool:
   name: 'sofia-self-hosted'
-
+```
 
 ## Useful links
 

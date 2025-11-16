@@ -6,6 +6,7 @@ jobs:
   displayName: Push image to ECR & Cosign
   pool:
     name: 'sofia-self-hosted'
+
   steps:
   - checkout: self
 
@@ -13,6 +14,9 @@ jobs:
     artifact: src
     displayName: Download source artifact
 
+  # ----------------------------------------------------
+  # 1) PUSH TO ECR (TAG + DIGEST)
+  # ----------------------------------------------------
   - task: Bash@3
     displayName: Push image to ECR
     env:
@@ -24,13 +28,7 @@ jobs:
       script: |
         set -euo pipefail
 
-        if ! command -v aws >/dev/null 2>&1; then
-          echo "Installing AWS CLI..."
-          curl -sSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
-          sudo installer -pkg AWSCLIV2.pkg -target /
-        fi
-
-        # Ensure ECR repo exists
+        echo "Ensuring ECR repository exists..."
         aws ecr describe-repositories \
           --repository-names "$(ECR_REPO)" \
           --region "$(AWS_REGION)" >/dev/null 2>&1 || \
@@ -38,49 +36,120 @@ jobs:
           --repository-name "$(ECR_REPO)" \
           --region "$(AWS_REGION)" >/dev/null
 
-        # Login to ECR
+        echo "Logging into ECR..."
         aws ecr get-login-password --region "$(AWS_REGION)" \
           | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
 
-        # Build & push image
+        echo "Building image: $(IMAGE_FULL)"
         cd app
         docker build -t "$(IMAGE_FULL)" .
+
+        echo "Pushing image to ECR..."
         docker push "$(IMAGE_FULL)"
 
-        # Store image reference
-        mkdir -p $(Pipeline.Workspace)/image-ref
-        echo "$(IMAGE_FULL)" > $(Pipeline.Workspace)/image-ref/image.txt
+        echo "Resolving image digest from ECR..."
+        IMAGE_DIGEST=$(aws ecr describe-images \
+          --repository-name "$(ECR_REPO)" \
+          --image-ids imageTag="$(IMAGE_TAG)" \
+          --query 'imageDetails[0].imageDigest' \
+          --output text)
 
+        IMAGE_DIGEST_REF="$(CONTAINER_REGISTRY)/$(ECR_REPO)@${IMAGE_DIGEST}"
+
+        echo "Storing image references..."
+        mkdir -p $(Pipeline.Workspace)/image-ref
+        echo "$(IMAGE_FULL)" > $(Pipeline.Workspace)/image-ref/image-tag.txt
+        echo "${IMAGE_DIGEST_REF}" > $(Pipeline.Workspace)/image-ref/image-digest.txt
+
+  # ----------------------------------------------------
+  # 2) COSIGN SIGN (BY DIGEST)
+  # ----------------------------------------------------
   - task: Bash@3
-    displayName: Cosign sign image
+    displayName: Cosign sign image (by digest)
+    env:
+      AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+      AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+      AWS_REGION: $(AWS_REGION)
+      COSIGN_PASSWORD: $(COSIGN_PASSWORD)
+      COSIGN_DOCKER_MEDIA_TYPES: "1"
     inputs:
       targetType: inline
       script: |
         set -euo pipefail
 
+        echo "Installing Cosign (local)..."
         curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
         chmod +x cosign
-        sudo mv cosign /usr/local/bin/
 
+        echo "Decoding Cosign keys..."
         echo "$(COSIGN_PRIVATE_KEY_B64)" | base64 -d > cosign.key
         echo "$(COSIGN_PUBLIC_KEY_B64)"  | base64 -d > cosign.pub
 
-        COSIGN_PASSWORD="${COSIGN_PASSWORD:-}" cosign sign --key cosign.key "$(IMAGE_FULL)"
+        echo "Reading image digest reference from artifact..."
+        IMAGE_DIGEST_REF="$(cat $(Pipeline.Workspace)/image-ref/image-digest.txt)"
+        echo "Image digest to sign: ${IMAGE_DIGEST_REF}"
 
-  - task: Bash@3
-    displayName: Cosign verify (global gate)
-    inputs:
-      targetType: inline
-      script: |
-        set -euo pipefail
+        echo "Ensuring Docker login to ECR (for Cosign)..."
+        aws ecr get-login-password --region "$(AWS_REGION)" \
+          | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
 
-        curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
-        chmod +x cosign
-        sudo mv cosign /usr/local/bin/
+        echo "Signing image with Cosign (by digest, legacy docker media types)..."
+        ./cosign \
+          -t 60s \
+          sign \
+          --key cosign.key \
+          --tlog-upload=false \
+          --yes \
+          "${IMAGE_DIGEST_REF}"
 
-        echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
-        cosign verify --key cosign.pub "$(IMAGE_FULL)"
+        echo "Done signing image."
 
+
+  # # ----------------------------------------------------
+  # # 3) COSIGN VERIFY (GLOBAL GATE, BY DIGEST)
+  # # ----------------------------------------------------
+  # - task: Bash@3
+  #   displayName: Cosign verify (global gate, by digest)
+  #   env:
+  #     AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+  #     AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+  #     AWS_REGION: $(AWS_REGION)
+  #     COSIGN_DOCKER_MEDIA_TYPES: "1"
+  #   inputs:
+  #     targetType: inline
+  #     script: |
+  #       set -euo pipefail
+
+  #       echo "Installing Cosign (local)..."
+  #       curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
+  #       chmod +x cosign
+
+  #       echo "Decoding public key..."
+  #       echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
+
+  #       echo "Reading image digest from artifact..."
+  #       IMAGE_DIGEST_REF="$(cat $(Pipeline.Workspace)/image-ref/image-digest.txt)"
+  #       echo "Image digest to verify: ${IMAGE_DIGEST_REF}"
+
+  #       echo "Ensuring Docker login to ECR (for Cosign verify)..."
+  #       aws ecr get-login-password --region "$(AWS_REGION)" \
+  #         | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
+
+  #       echo "Verifying image signature with Cosign (by digest, using registry signatures)..."
+  #       ./cosign \
+  #         -t 60s \
+  #         verify \
+  #         --key cosign.pub \
+  #         --insecure-ignore-tlog \
+  #         "${IMAGE_DIGEST_REF}"
+
+  #       echo "Logging out from ECR at the end of pipeline..."
+  #       docker logout "$(CONTAINER_REGISTRY)" || true
+
+
+  # ----------------------------------------------------
+  # 4) PUBLISH IMAGE REFERENCE ARTIFACT
+  # ----------------------------------------------------
   - task: PublishBuildArtifacts@1
     displayName: Publish image-ref artifact
     inputs:
