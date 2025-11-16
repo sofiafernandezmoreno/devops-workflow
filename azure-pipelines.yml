@@ -52,13 +52,13 @@ stages:
           RENOVATE_TOKEN: $(RENOVATE_TOKEN)
 
   # 1) Build + tests + Trivy
-  - template: .azure-pipelines/stages-build-test-scan.yml
+  - template: .azure-pipelines/job-build-test-scan.yml
 
   # 2) Push a ECR + Cosign 
-  - template: .azure-pipelines/stages-push-and-sign.yml
+  - template: .azure-pipelines/job-push-and-sign.yml
 
   # 3) Deploy DEV
-  - template: .azure-pipelines/stages-deploy.yml
+  - template: .azure-pipelines/job-deploy.yml
     parameters:
       stageName: 'Deploy_Dev'
       displayName: 'Deploy to DEV (namespace: nn-devops-dev)'
@@ -70,7 +70,7 @@ stages:
       extraCondition: "or(startsWith(variables['Build.SourceBranch'], 'refs/pull/'), eq(variables['Build.SourceBranch'], 'refs/heads/main'))"
 
   # 4) Deploy STAGING
-  - template: .azure-pipelines/stages-deploy.yml
+  - template: .azure-pipelines/job-deploy.yml
     parameters:
       stageName: 'Deploy_Staging'
       displayName: 'Deploy to STAGING (namespace: nn-devops-staging)'
@@ -82,7 +82,7 @@ stages:
       extraCondition: "and(eq(variables['Build.SourceBranch'], 'refs/heads/main'), ne(variables['Build.Reason'], 'PullRequest'))"
 
   # 5) Deploy PROD
-  - template: .azure-pipelines/stages-deploy.yml
+  - template: .azure-pipelines/job-deploy.yml
     parameters:
       stageName: 'Deploy_Prod'
       displayName: 'Deploy to PROD (namespace: nn-devops-prod)'
