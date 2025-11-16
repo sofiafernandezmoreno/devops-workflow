@@ -1,0 +1,52 @@
+# .azure-pipelines/job-build-test-scan.yml
+jobs:
+- job: build_test_scan
+  displayName: Build + Tests + Trivy
+  pool:
+    name: 'sofia-self-hosted'
+  steps:
+  - checkout: self
+
+  - task: Bash@3
+    displayName: Unit tests (Maven)
+    inputs:
+      targetType: inline
+      script: |
+        set -euo pipefail
+        cd app
+        mvn -q -DskipTests=false test
+
+  - task: Bash@3
+    displayName: Build Docker image
+    inputs:
+      targetType: inline
+      script: |
+        set -euo pipefail
+        cd app
+        docker build -t "$(IMAGE_FULL)" .
+
+  - task: Bash@3
+    displayName: Trivy scan (fail on CRITICAL)
+    inputs:
+      targetType: inline
+      script: |
+        set -euo pipefail
+
+        mkdir -p "$HOME/.local/bin"
+        export PATH="$HOME/.local/bin:$PATH"
+
+        if ! command -v trivy >/dev/null 2>&1; then
+          echo "Installing Trivy locally into \$HOME/.local/bin..."
+          curl -sfL https://raw.githubusercontent.com/aquasecurity/trivy/main/contrib/install.sh \
+            | sh -s -- -b "$HOME/.local/bin"
+        fi
+
+        echo "Trivy version:"
+        trivy --version
+
+        echo "Running Trivy scan on image: $(IMAGE_FULL)"
+        trivy image --severity CRITICAL --exit-code 1 --no-progress "$(IMAGE_FULL)"
+
+  - publish: $(Build.SourcesDirectory)
+    artifact: src
+    displayName: Publish source artifact

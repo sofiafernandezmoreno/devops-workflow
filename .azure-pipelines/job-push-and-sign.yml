@@ -1,0 +1,81 @@
+# .azure-pipelines/job-push-and-sign.yml
+jobs:
+- job: push_sign
+  displayName: Push image to ECR & Cosign
+  pool:
+    name: 'sofia-self-hosted'
+  steps:
+  - download: current
+    artifact: src
+    displayName: Download source artifact
+
+  - task: Bash@3
+    displayName: Push image to ECR
+    env:
+      AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
+      AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
+      AWS_REGION: $(AWS_REGION)
+    inputs:
+      targetType: inline
+      script: |
+        set -euo pipefail
+
+        if ! command -v aws >/dev/null 2>&1; then
+          echo "Installing AWS CLI..."
+          curl -sSL "https://awscli.amazonaws.com/AWSCLIV2.pkg" -o "AWSCLIV2.pkg"
+          sudo installer -pkg AWSCLIV2.pkg -target /
+        fi
+
+        aws ecr describe-repositories \
+          --repository-names "$(ECR_REPO)" \
+          --region "$(AWS_REGION)" >/dev/null 2>&1 || \
+        aws ecr create-repository \
+          --repository-name "$(ECR_REPO)" \
+          --region "$(AWS_REGION)" >/dev/null
+
+        aws ecr get-login-password --region "$(AWS_REGION)" \
+          | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
+
+        cd app
+        docker build -t "$(IMAGE_FULL)" .
+
+        docker push "$(IMAGE_FULL)"
+
+        mkdir -p $(Pipeline.Workspace)/image-ref
+        echo "$(IMAGE_FULL)" > $(Pipeline.Workspace)/image-ref/image.txt
+
+  - task: Bash@3
+    displayName: Cosign sign image
+    inputs:
+      targetType: inline
+      script: |
+        set -euo pipefail
+
+        curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
+        chmod +x cosign
+        sudo mv cosign /usr/local/bin/
+
+        echo "$(COSIGN_PRIVATE_KEY_B64)" | base64 -d > cosign.key
+        echo "$(COSIGN_PUBLIC_KEY_B64)"  | base64 -d > cosign.pub
+
+        COSIGN_PASSWORD="${COSIGN_PASSWORD:-}" cosign sign --key cosign.key "$(IMAGE_FULL)"
+
+  - task: Bash@3
+    displayName: Cosign verify (global gate)
+    inputs:
+      targetType: inline
+      script: |
+        set -euo pipefail
+
+        curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
+        chmod +x cosign
+        sudo mv cosign /usr/local/bin/
+
+        echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
+        cosign verify --key cosign.pub "$(IMAGE_FULL)"
+
+  - task: PublishBuildArtifacts@1
+    displayName: Publish image-ref artifact
+    inputs:
+      pathToPublish: $(Pipeline.Workspace)/image-ref
+      artifactName: image-ref
