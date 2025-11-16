@@ -83,9 +83,13 @@ stages:
           clusterNameVar: '$(CLUSTER_NAME_PROD)'
 # --------------------------------------------------------
 # 6) Renovate (only schedule or RUN_RENOVATE = true)
-# --------------------------------------------------------
+# --------------------------------------------------------       
   - stage: Renovate
-    displayName: Renovate Dependencies
-    condition: or(eq(variables['Build.Reason'], 'Schedule'),eq(variables['RUN_RENOVATE'], 'true')  )
+    displayName: Renovate dependency updates
+    condition: and(succeeded(), eq(variables['Build.Reason'], 'Schedule'))
     jobs:
-      - template: job_templates/job-renovate.yml          
+      - template: job_templates/job-renovate.yml
+        parameters:
+          poolName: 'sofia-self-hosted'
+          azureEndpoint: 'https://dev.azure.com/sofia-nn-challenge'
+          azureRepo: 'nn-devops-challenge/nn-devops-challenge'      

@@ -34,7 +34,7 @@ variables:
   NAMESPACE_STAGING: 'nn-devops-staging'
   NAMESPACE_PROD: 'nn-devops-prod'
 
-  RUN_RENOVATE: 'false'
+  RUN_RENOVATE: 'true'
 
 stages:
 - template: .azure-pipelines/main_template.yml
