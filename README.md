@@ -36,7 +36,7 @@ Although the challenge only requires deploying a simple Spring Boot application 
 * Makefile automation for local workflows
 * IAM least privilege policy for Terraform service accounts
 
-## 🏗️ Infrastructure Overview
+## Infrastructure Overview
 
 Terraform provisions:
 
@@ -48,7 +48,7 @@ Terraform provisions:
 * Optional default VPC usage
 * S3 backend for Terraform state + DynamoDB lock
 
-## 🗺️ Architecture Diagram (Infrastructure)
+## Architecture Diagram (Infrastructure)
 
 ```mermaid
 flowchart LR
@@ -140,7 +140,7 @@ class KMS security
 
 ```
 
-## 🐳 CI/CD Pipeline Diagram (Azure DevOps)
+## CI/CD Pipeline Diagram (Azure DevOps)
 
 ```mermaid
 flowchart TD
@@ -210,8 +210,28 @@ class DEPLOY_DEV,DEPLOY_STG,DEPLOY_PROD deploy
 class APPROVE_DEV,APPROVE_STG,APPROVE_PROD stage
 class RENOVATE,RENOVATE_PR renovate
 
-
 ```
+
+## CI/CD Stages Summary
+
+1. BuildTestScan
+    * Maven build
+    * Unit tests
+    * Docker build
+    * Trivy vulnerability scan (fail on CRITICAL)
+
+2. PushAndSign
+    * Push image to the AWS ECR repository
+    * Sign the image using Cosign
+    * Upload signatures to ECR
+3. Environment Promotions
+    * dev → staging → prod via manual approvals
+    * Cosign signature verification before every deployment
+    * Helm upgrade with per-environment overrides
+4. Renovate Bot (Weekly)
+    * Automated dependency PRs (Java, Terraform, Helm, Docker)
+
+This structure closely aligns with secure enterprise pipelines used in production.
 
 ## 🔐 Security & Supply Chain Protection
 
@@ -411,6 +431,120 @@ Just run:
 ```
 make tf-destroy ENV=dev
 ```
+## 📸 Demo & Evidence
+
+### CI/CD Pipeline Execution (Azure DevOps)
+These screenshots demonstrate the complete execution of the multi-stage pipeline, including build, scan, sign, push, and environment promotion.
+
+* Successful end-to-end pipeline run
+👉 Screenshot: ![alt text](docs/img/pipeline_all.png)
+Shows all stages completed:
+  * BuildTestScan
+  * PushAndSign
+  * Deploy_Dev
+  * Deploy_Staging
+  * Deploy_Prod
+
+* Manual approvals for promotion
+👉 Screenshot: ![alt text](docs/img/approval_dev.png)
+
+* Pipeline logs showing Cosign verification step
+👉 Screenshot: ![alt text](docs/img/cosign_verify.png)
+
+* Trivy scan logs proving CRITICAL issues fail the build
+👉 Screenshot: ![alt text](docs/img/trivy.png)
+
+These confirm the CI/CD security gates are active and functioning.
+
+### Container Signing & Verification (Cosign)
+
+To validate the supply chain security:
+
+* Cosign sign output (digest + signature uploaded to ECR)
+👉 Screenshot: ![alt text](docs/img/cosign_verify.png)
+
+* Cosign verify output before deployment
+👉 Screenshot: ![alt text](docs/img/cosign_before_deploy.png)
+
+This proves that only signed images can be deployed to dev, staging, or prod.
+
+### Image in AWS ECR (with Signature Attached)
+
+Visual confirmation that:
+
+* The image is pushed to the correct ECR repository
+* The signature (sha256-*.sig) exists
+* Tags and digests match the values used in deployments
+
+👉 Screenshot: ![alt text](docs/img/ecr.png)
+
+This validates the registry integrity and the promotion artifact flow.
+
+### Application Deployment on EKS (dev, staging, prod)
+
+To prove Helm deployments were applied to real Kubernetes namespaces:
+
+```
+kubectl get pods -n nn-devops-dev
+```
+👉 Screenshot or GIF: [here]
+
+Staging and Prod namespaces
+👉 Screenshot: [here]
+
+Rolling update via Helm
+👉 GIF: [here]
+
+Application logs via kubectl logs
+👉 Screenshot: [here]
+
+This confirms the application is deployed and running across all environments.
+
+### Kubernetes Objects Deployment
+
+To validate Helm chart correctness:
+
+kubectl get deploy,svc,ing -n dev
+👉 Screenshot: [here]
+
+Deployment YAML generated (helm template)
+👉 Screenshot: [here]
+
+These validate that the chart produces valid and functional Kubernetes objects.
+
+
+## 🚀 Future Improvements & Enhancements
+
+### 🔐 Security
+
+* SBOM generation (Syft) + Grype scanning
+* OPA Gatekeeper / Kyverno image-signing policies
+* Attestations + SLSA compliance
+
+### 📈 Observability
+
+* Grafana dashboards (latency, saturation, error rate)
+* Prometheus alert rules
+* Centralized logging (Loki / CloudWatch / ELK)
+
+### 🧩 Deployment & GitOps
+
+* ArgoCD migration
+* Argo Rollouts for canary
+* Policy-as-Code enforcement
+
+### 💰 Cost Optimization
+
+* Spot node groups
+* Image pruning
+* Right-sizing with Compute Optimizer
+
+### 🛠️ IaC Enhancements
+
+* Terragrunt structure
+* Pre-commit hooks (tflint, tfsec, checkov)
+* Drift detection
+
 
 ## Useful links
 
