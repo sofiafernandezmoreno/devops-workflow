@@ -40,6 +40,18 @@ jobs:
               echo "Image (tag): ${IMAGE_TAG_REF}"
               echo "Image (digest): ${IMAGE_DIGEST_REF}"
 
+              # ----- COSIGN SIGNATURE VERIFICATION -----
+              echo "Decoding Cosign public key..."
+              echo "$COSIGN_PUBLIC_KEY_B64" | base64 -d > cosign.pub
+
+              echo "Verifying image signature with Cosign (by digest) before deploy..."
+              ./cosign verify \
+                --key cosign.pub \
+                "${IMAGE_DIGEST_REF}"
+
+              echo "Cosign verification OK, proceeding with deployment..."
+              # -----------------------------------------
+
               echo "Updating kubeconfig for cluster ${CLUSTER_NAME}..."
               aws eks update-kubeconfig --region "$(AWS_REGION)" --name "${CLUSTER_NAME}"
 
@@ -48,3 +60,4 @@ jobs:
 
               echo "Deploying with Helm using image (tag): ${IMAGE_TAG_REF}"
               ./scripts/deploy.sh "${{ parameters.envName }}" "${IMAGE_TAG_REF}" ./helm "${NAMESPACE}"
+

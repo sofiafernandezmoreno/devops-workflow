@@ -56,28 +56,27 @@ jobs:
 
         IMAGE_DIGEST_REF="$(CONTAINER_REGISTRY)/$(ECR_REPO)@${IMAGE_DIGEST}"
 
-        echo "Storing image references..."
+        echo "Storing image references and digest blob..."
         mkdir -p $(Pipeline.Workspace)/image-ref
-        echo "$(IMAGE_FULL)"      > $(Pipeline.Workspace)/image-ref/image-tag.txt
+        echo "$(IMAGE_FULL)"       > $(Pipeline.Workspace)/image-ref/image-tag.txt
         echo "${IMAGE_DIGEST_REF}" > $(Pipeline.Workspace)/image-ref/image-digest.txt
+        printf "%s" "${IMAGE_DIGEST_REF}" > $(Pipeline.Workspace)/image-ref/digest.txt
 
   # ----------------------------------------------------
-  # 2) COSIGN SIGN (BY DIGEST, BUNDLE LOCAL)
+  # 2) COSIGN SIGN-BLOB (DIGEST SIGNATURE)
   # ----------------------------------------------------
   - task: Bash@3
-    displayName: Cosign sign image (by digest, bundle)
+    displayName: Cosign sign digest (blob)
     env:
-      AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
-      AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
-      AWS_REGION: $(AWS_REGION)
       COSIGN_PASSWORD: $(COSIGN_PASSWORD)
     inputs:
       targetType: inline
       script: |
         set -euo pipefail
 
-        echo "Installing Cosign (local)..."
+        echo "Ensuring Cosign is available..."
         if ! command -v cosign >/dev/null 2>&1; then
+          echo "Cosign not found in PATH, downloading local binary..."
           curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
           chmod +x cosign
           COSIGN_BIN=./cosign
@@ -89,41 +88,33 @@ jobs:
         echo "$(COSIGN_PRIVATE_KEY_B64)" | base64 -d > cosign.key
         echo "$(COSIGN_PUBLIC_KEY_B64)"  | base64 -d > cosign.pub
 
-        echo "Reading image digest reference from artifact..."
-        IMAGE_DIGEST_REF="$(cat $(Pipeline.Workspace)/image-ref/image-digest.txt)"
-        echo "Image digest to sign: ${IMAGE_DIGEST_REF}"
+        DIGEST_FILE="$(Pipeline.Workspace)/image-ref/digest.txt"
+        SIG_FILE="$(Pipeline.Workspace)/image-ref/digest.sig"
 
-        echo "Ensuring Docker login to ECR (for Cosign read)..."
-        aws ecr get-login-password --region "$(AWS_REGION)" \
-          | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
-
-        echo "Signing image with Cosign (by digest, writing bundle)..."
+        echo "Signing digest blob with Cosign..."
         "${COSIGN_BIN}" \
           -t 60s \
-          sign \
+          sign-blob \
           --key cosign.key \
-          --upload=true \
-          --yes \
-          "${IMAGE_DIGEST_REF}"
+          --tlog-upload=false \
+          --output-signature "${SIG_FILE}" \
+          "${DIGEST_FILE}"
 
-        echo "Done signing image. Bundle stored at $(Pipeline.Workspace)/image-ref/image.bundle"
+        echo "Done signing digest. Signature stored at ${SIG_FILE}"
 
   # ----------------------------------------------------
-  # 3) COSIGN VERIFY (GLOBAL GATE, USING BUNDLE)
+  # 3) COSIGN VERIFY-BLOB (GLOBAL SECURITY GATE)
   # ----------------------------------------------------
   - task: Bash@3
-    displayName: Cosign verify (global gate, by digest + bundle)
-    env:
-      AWS_ACCESS_KEY_ID: $(AWS_ACCESS_KEY_ID)
-      AWS_SECRET_ACCESS_KEY: $(AWS_SECRET_ACCESS_KEY)
-      AWS_REGION: $(AWS_REGION)
+    displayName: Cosign verify (global gate, digest blob)
     inputs:
       targetType: inline
       script: |
         set -euo pipefail
 
-        echo "Installing Cosign (local)..."
+        echo "Ensuring Cosign is available..."
         if ! command -v cosign >/dev/null 2>&1; then
+          echo "Cosign not found in PATH, downloading local binary..."
           curl -sSL https://github.com/sigstore/cosign/releases/latest/download/cosign-darwin-arm64 -o cosign
           chmod +x cosign
           COSIGN_BIN=./cosign
@@ -134,24 +125,21 @@ jobs:
         echo "Decoding public key..."
         echo "$(COSIGN_PUBLIC_KEY_B64)" | base64 -d > cosign.pub
 
-        echo "Reading image digest and bundle from artifact..."
-        IMAGE_DIGEST_REF="$(cat $(Pipeline.Workspace)/image-ref/image-digest.txt)"
-        BUNDLE_PATH="$(Pipeline.Workspace)/image-ref/image.bundle"
+        DIGEST_FILE="$(Pipeline.Workspace)/image-ref/digest.txt"
+        SIG_FILE="$(Pipeline.Workspace)/image-ref/digest.sig"
 
-        echo "Image digest to verify: ${IMAGE_DIGEST_REF}"
-        echo "Bundle file: ${BUNDLE_PATH}"
-
-        echo "Verifying image signature with Cosign (by digest, using bundle)..."
+        echo "Verifying digest blob signature with Cosign..."
         "${COSIGN_BIN}" \
           -t 60s \
-          verify \
+          verify-blob \
           --key cosign.pub \
-          "${IMAGE_DIGEST_REF}"
-          
-        echo "Global verify OK."
+          --signature "${SIG_FILE}" \
+          "${DIGEST_FILE}"
+
+        echo "Global signature verification OK."
 
   # ----------------------------------------------------
-  # 4) PUBLISH IMAGE REFERENCE + BUNDLE ARTIFACT
+  # 4) PUBLISH ARTIFACTS (DIGEST + SIGNATURE)
   # ----------------------------------------------------
   - task: PublishBuildArtifacts@1
     displayName: Publish image-ref artifact
