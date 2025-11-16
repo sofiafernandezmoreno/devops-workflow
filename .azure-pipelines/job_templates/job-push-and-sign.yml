@@ -94,8 +94,17 @@ jobs:
           | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
 
         echo "Signing image with Cosign (by digest)..."
-        COSIGN_EXPERIMENTAL=1 cosign sign --key cosign.key "${IMAGE_DIGEST_REF}"
+        COSIGN_EXPERIMENTAL=1 ./cosign \
+          -t 60s \
+          -d \
+          sign \
+          --key cosign.key \
+          --tlog-upload=false \
+          --yes \
+          "${IMAGE_DIGEST_REF}"
         echo "Done signing image."
+
+
 
   # ----------------------------------------------------
   # 3) COSIGN VERIFY (GLOBAL GATE, BY DIGEST)
