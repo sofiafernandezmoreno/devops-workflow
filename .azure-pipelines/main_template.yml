@@ -57,7 +57,7 @@ stages:
     dependsOn: Deploy_Dev
     condition: and(succeeded(),eq(variables['Build.SourceBranch'], 'refs/heads/main'))
     jobs:
-      #- template: job_templates/job-helm-ci.yml      
+      - template: job_templates/job-helm-ci.yml      
       - template: job_templates/job-deploy.yml
         parameters:
           envName: 'staging'
@@ -73,7 +73,7 @@ stages:
     dependsOn: Deploy_Staging
     condition: and(succeeded(),eq(variables['Build.SourceBranch'], 'refs/heads/main'))
     jobs:
-      #- template: job_templates/job-helm-ci.yml      
+      - template: job_templates/job-helm-ci.yml      
       - template: job_templates/job-deploy.yml
         parameters:
           envName: 'prod'

@@ -21,8 +21,7 @@ case "${ENVIRONMENT}" in
     ;;
 esac
 
-kubectl get namespace "${NAMESPACE}" >/dev/null 2>&1 || \
-  kubectl create namespace "${NAMESPACE}"
+kubectl create namespace "${NAMESPACE}" --dry-run=client -o yaml | kubectl apply -f -
 
 REPO="${IMAGE%%:*}"
 TAG="${IMAGE##*:}"
