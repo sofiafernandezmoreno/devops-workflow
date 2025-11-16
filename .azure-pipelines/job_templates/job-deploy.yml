@@ -44,6 +44,10 @@ jobs:
               echo "Decoding Cosign public key..."
               echo "$COSIGN_PUBLIC_KEY_B64" | base64 -d > cosign.pub
 
+              echo "Ensuring Docker login to ECR (for Cosign verify)..."
+              aws ecr get-login-password --region "$(AWS_REGION)" \
+                | docker login --username AWS --password-stdin "$(CONTAINER_REGISTRY)"
+              
               echo "Verifying image signature with Cosign (by digest) before deploy..."
               ./cosign verify \
                 --key cosign.pub \
