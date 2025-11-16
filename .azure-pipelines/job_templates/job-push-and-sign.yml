@@ -137,10 +137,8 @@ jobs:
 
         echo "Verifying image signature with Cosign (by digest, using registry signatures)..."
         ./cosign \
-          -t 60s \
           verify \
           --key cosign.pub \
-          --insecure-ignore-tlog \
           "${IMAGE_DIGEST_REF}"
 
         echo "Logging out from ECR at the end of pipeline..."
