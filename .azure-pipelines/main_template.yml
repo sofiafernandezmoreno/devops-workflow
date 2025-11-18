@@ -85,8 +85,7 @@ stages:
 # --------------------------------------------------------       
   - stage: Renovate
     displayName: Renovate dependency updates
-    #condition: and(succeeded(), eq(variables['Build.Reason'], 'Schedule'))
-    condition: succeeded()
+    condition: and(succeeded(), eq(variables['Build.Reason'], 'Schedule'))
     jobs:
       - template: job_templates/job-renovate.yml
         parameters:
