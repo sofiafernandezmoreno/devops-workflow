@@ -3,7 +3,6 @@
 
 ![Type: application](https://img.shields.io/badge/Type-application-informational?style=flat-square) ![Version: 1.0.0](https://img.shields.io/badge/Version-1.0.0-informational?style=flat-square)
 
-[![Build Status](https://dev.azure.com/sofia-nn-challenge/nn-devops-challenge/_apis/build/status%2Fsofiafernandezmoreno.nn-devops-challenge%20(2)?branchName=main)](https://dev.azure.com/sofia-nn-challenge/nn-devops-challenge/_build/latest?definitionId=2&branchName=main)
 
 This repository implements a full DevOps workflow designed to deploy a simple Spring Boot application to EKS, this solution extends far beyond that by providing a **multi-environment, fully secure, auditable CI/CD system**.
 
@@ -350,8 +349,7 @@ pool:
   name: 'sofia-self-hosted'
 ```
 
-## 🔄 Automated Dependency Management – Renovate (not for this challenge)
-
+## 🔄 Automated Dependency Management – Renovate
 To keep the stack secure and reduce manual maintenance, this repository uses [Renovate Bot](https://docs.renovatebot.com/) to automatically detect and propose dependency updates.
 
 ### What Renovate manages
@@ -386,17 +384,6 @@ Every Renovate PR automatically triggers the **same CI/CD pipeline** as regular 
 5. Optional Helm deploy to EKS (dev/staging/prod based on environment)
 
 This ensures that **all dependency updates go through the full build, security scan and deployment process** before being merged.
-
-### Why Renovate is used in this challenge
-
-Although the original NN DevOps Challenge only requires deploying a sample application, adding Renovate demonstrates:
-
-- **Production-grade maintenance practices** (automated dependency management)
-- **Security by design**, keeping images and libraries up to date
-- **Clear separation of concerns** between feature development and dependency updates
-- **GitOps-friendly workflow**, where all changes (including version bumps) are traceable via Pull Requests
-
-In a real-world scenario, this significantly reduces toil for the DevOps team and helps keep the AWS, Kubernetes and Spring Boot stack secure over time.
 
 ## 🧹 Cleanup Strategy (AWS Free Tier)
 
