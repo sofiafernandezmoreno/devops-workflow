@@ -8,7 +8,7 @@
 This repository implements a full DevOps workflow designed to deploy a simple Spring Boot application to EKS, this solution extends far beyond that by providing a **multi-environment, fully secure, auditable CI/CD system**.
 
 * Infrastructure as Code (Terraform)
-* Three isolated clusters (dev, staging, prod) (only dev is used for the challenge exercise)
+* Three isolated clusters (dev, staging, prod)
 * Used DEV clusters to promotes through dev --> staging --> prod using namespaces
 * Automated Docker build workflow for a SpringBoot app generated with https://start.spring.io/
 * Security scanning with Trivy
